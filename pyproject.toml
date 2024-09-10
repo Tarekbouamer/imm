@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imm"
+description = "ImMatch (IMM): A versatile library for image matching and feature extraction."
+authors = [{ name = "BOUAMER Tarek", email = "tarekbouamer1788@gmail.com" }]
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+
+dependencies = [
+    "click>=8.0",
+    "einops>=0.3",
+    "gdown>=4.0",
+    "h5py>=3.3",
+    "kornia>=0.7",
+    "loguru>=0.5",
+    "matplotlib>=3.4",
+    "numpy>=1.21,<2.0",
+    "omegaconf>=2.1",
+    "opencv-python>=4.5",
+    "rich>=10.6",
+    "scipy>=1.7",
+    "tqdm>=4.62",
+]
+
+dynamic = ["readme", "version"]
+
+[tool.setuptools]
+py-modules = ["imm"]
+
+[tool.setuptools.dynamic]
+version = { attr = "imm.__version__" }
+readme = { file = "README.md" }
+
+[project.urls]
+"Homepage" = "https://github.com/Tarekbouamer/imm"
+"Documentation" = "https://github.com/Tarekbouamer/imm/wiki"
+"Source" = "https://github.com/Tarekbouamer/imm"
+"Tracker" = "https://github.com/Tarekbouamer/imm/issues"
+
+[project.entry-points.console_scripts]
+imm-match = "imm.tools.match:match_images"
+imm-extract = "imm.tools.extract:extract"

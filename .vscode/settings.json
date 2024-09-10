@@ -1,0 +1,12 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "python.formatting.provider": "none",
+    "editor.tabSize": 4,
+    "todo-tree.general.showActivityBarBadge": true,
+    "workbench.tree.indent": 15,
+    "python.analysis.typeCheckingMode": "off",
+    "cSpell.enabled": false,
+
+}
