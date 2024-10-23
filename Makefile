@@ -10,10 +10,10 @@ install:
 	$(PIP) install .
 
 dev:
-	$(PIP) install -ve .[optional]
+	$(PIP) install -e .[dev,docs,test]
 
 torch:
-	$(PIP) install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu118
+	$(PIP) install torch torchvision --index-url https://download.pytorch.org/whl/cu118 --upgrade
 
 clean:
 	rm -rf build dist *.egg-info
@@ -29,3 +29,6 @@ format:
 
 check:
 	ruff check $(SRC_DIR)
+
+test:
+	$(PYTHON) -m pytest tests

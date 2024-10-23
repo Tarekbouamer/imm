@@ -13,6 +13,7 @@ dependencies = [
     "click>=8.0",
     "einops>=0.3",
     "gdown>=4.0",
+    "gradio>=2.0",
     "h5py>=3.3",
     "kornia>=0.7",
     "loguru>=0.5",
@@ -23,6 +24,8 @@ dependencies = [
     "rich>=10.6",
     "scipy>=1.7",
     "tqdm>=4.62",
+    "pytorch-lightning==1.5.2",
+    "timm>=0.4",
 ]
 
 dynamic = ["readme", "version"]
@@ -43,3 +46,11 @@ readme = { file = "README.md" }
 [project.entry-points.console_scripts]
 imm-match = "imm.tools.match:match_images"
 imm-extract = "imm.tools.extract:extract"
+imm-gui = "imm.ui:main"
+
+[project.optional-dependencies]
+dev = ["black>=22.0", "flake8>=4.0", "isort>=5.0"]
+
+docs = ["sphinx>=4.0", "sphinx-rtd-theme>=0.5"]
+
+test = ["pytest>=6.0", "pytest-cov>=3.0", "tox>=3.0"]

@@ -206,17 +206,16 @@ class XFeat(FeatureModel):
     def __init__(
         self,
         cfg,
-        # weights=os.path.abspath(os.path.dirname(__file__)) + "/../weights/xfeat.pt",
-        # top_k=4096,
-        # detection_threshold=0.05,
     ):
         super().__init__(cfg)
 
-        self.dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.net = XFeatModel().to(self.dev).eval()
+        # net
+        self.net = XFeatModel().eval()
 
-        self.top_k = cfg["top_k"]
+        # cfg
+        self.top_k = cfg["max_keypoints"]
         self.detection_threshold = cfg["detection_threshold"]
+        self.mode = cfg["mode"]
 
         # if weights is not None:
         #     if isinstance(weights, str):
@@ -343,8 +342,10 @@ class XFeat(FeatureModel):
             "keypoints1": d1["keypoints"][None, ...],
             "descriptors0": d0["descriptors"][None, ...],
             "descriptors1": d1["descriptors"][None, ...],
-            "image_size0": torch.tensor(d0["image_size"]).to(self.dev)[None, ...],
-            "image_size1": torch.tensor(d1["image_size"]).to(self.dev)[None, ...],
+            # "image_size0": torch.tensor(d0["image_size"]).to(self.dev)[None, ...],
+            # "image_size1": torch.tensor(d1["image_size"]).to(self.dev)[None, ...],
+            "image_size0": torch.tensor(d0["image_size"])[None, ...],
+            "image_size1": torch.tensor(d1["image_size"])[None, ...],
         }
 
         # Dict -> log_assignment: [B x M+1 x N+1] matches0: [B x M] matching_scores0: [B x M] matches1: [B x N] matching_scores1: [B x N] matches: List[[Si x 2]], scores: List[[Si]]
@@ -421,7 +422,8 @@ class XFeat(FeatureModel):
         """Guarantee that image is divisible by 32 to avoid aliasing artifacts."""
         if isinstance(x, np.ndarray) and len(x.shape) == 3:
             x = torch.tensor(x).permute(2, 0, 1)[None]
-        x = x.to(self.dev).float()
+        # x = x.to(self.dev).float()
+        x = x.float()
 
         H, W = x.shape[-2:]
         _H, _W = (H // 32) * 32, (W // 32) * 32
@@ -608,33 +610,38 @@ class XFeat(FeatureModel):
         return data
 
     def forward(self, data: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        data = self.transform_inputs(data)
+        # sparse
+        scales = None
+        scores = None
+        if self.mode == "sparse":
+            preds = self.detectAndCompute(data["image"], top_k=self.top_k)
+            preds = preds[0]
+            kpts, scores, desc = preds["keypoints"], preds["scores"], preds["descriptors"].T
+        elif self.mode == "dense":
+            preds = self.detectAndComputeDense(data["image"], top_k=self.top_k)
+            kpts, desc, scales = preds["keypoints"], preds["descriptors"], preds["scales"]
+            kpts = kpts[0]
+            desc = desc[0].T
 
-        # sparse keypoints and descriptors
-        preds = self.detectAndCompute(data["image"], top_k=4000)
-
-        kpts = preds[0]["keypoints"]
-        scores = preds[0]["scores"]
-        desc = preds[0]["descriptors"].T
-
-        # # dense keypoints and descriptors
-        # preds = self.detectAndComputeDense(data["image"], top_k=4000)
-
-        # kpts = preds["keypoints"]
-        # scores = torch.ones(kpts.shape[0])
-        # desc = preds["descriptors"]
-
-        return {"kpts": [kpts], "scores": [scores], "desc": [desc]}
+        return {"kpts": [kpts], "desc": [desc]}
 
 
 # default configurations
 default_cfgs = {
-    "xfeat": _cfg(
+    "xfeat_sparse": _cfg(
         url="https://github.com/verlab/accelerated_features/raw/main/weights/xfeat.pt",
-        descriptor_dim=256,
+        descriptor_dim=64,
         detection_threshold=0.05,
-        top_k=4096,
-    )
+        max_keypoints=2048,
+        mode="sparse",
+    ),
+    "xfeat_dense": _cfg(
+        url="https://github.com/verlab/accelerated_features/raw/main/weights/xfeat.pt",
+        descriptor_dim=64,
+        detection_threshold=0.05,
+        max_keypoints=2048,
+        mode="dense",
+    ),
 }
 
 
@@ -650,9 +657,15 @@ def _make_model(
     # load pretrained
     if pretrained:
         load_model_weights(model.net, name, cfg)
+
     return model
 
 
-@EXTRACTORS_REGISTRY.register(name="xfeat", default_cfg=default_cfgs["xfeat"])
-def xfeat(cfg: Dict[str, Any] = {}, **kwargs):
-    return _make_model(name="xfeat", cfg=cfg, **kwargs)
+@EXTRACTORS_REGISTRY.register(name="xfeat_sparse", default_cfg=default_cfgs["xfeat_sparse"])
+def xfeat_sparse(cfg: Dict[str, Any] = {}, **kwargs):
+    return _make_model(name="xfeat_sparse", cfg=cfg, **kwargs)
+
+
+@EXTRACTORS_REGISTRY.register(name="xfeat_dense", default_cfg=default_cfgs["xfeat_dense"])
+def xfeat_dense(cfg: Dict[str, Any] = {}, **kwargs):
+    return _make_model(name="xfeat_dense", cfg=cfg, **kwargs)

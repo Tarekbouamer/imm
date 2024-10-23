@@ -1,6 +1,6 @@
 import torch
 from einops.einops import rearrange
-from torchvision import transforms
+import torchvision.transforms as tfn
 
 from imm.base import MatcherModel
 from imm.matchers.modules.aspanformer_modules import (
@@ -107,12 +107,12 @@ class ASpanFormer(MatcherModel):
         self.coarsest_level = self.cfg["coarse"]["coarsest_level"]
 
     def transform_inputs(self, data):
-        image0 = transforms.Grayscale()(data["image0"])
-        image1 = transforms.Grayscale()(data["image1"])
+        image0 = tfn.Grayscale()(data["image0"])
+        image1 = tfn.Grayscale()(data["image1"])
 
         # resize to 640 x 480
-        image0 = transforms.Resize([480, 640], antialias=True)(image0)
-        image1 = transforms.Resize([480, 640], antialias=True)(image1)
+        image0 = tfn.Resize([480, 640], antialias=True)(image0)
+        image1 = tfn.Resize([480, 640], antialias=True)(image1)
 
         scale00 = torch.tensor([data["image0"].shape[2] / 640, data["image0"].shape[1] / 480]).to(image0.device)
         scale11 = torch.tensor([data["image1"].shape[2] / 640, data["image1"].shape[1] / 480]).to(image1.device)
@@ -291,7 +291,7 @@ class ASpanFormer(MatcherModel):
         h, w = image.shape[2], image.shape[3]
         h_new, w_new = h // df * df, w // df * df
         if h != h_new or w != w_new:
-            img_new = transforms.Resize([h_new, w_new]).forward(image)
+            img_new = tfn.Resize([h_new, w_new]).forward(image)
         else:
             img_new = image
         return img_new

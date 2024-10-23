@@ -334,7 +334,8 @@ def filter_matches(scores: torch.Tensor, th: float):
 class LightGlue(MatcherModel):
     default_conf = {
         "name": "lightglue",  # just for interfacing
-        "input_dim": 256,  # input descriptor dimension (autoselected from weights)
+        # input descriptor dimension (autoselected from weights)
+        "input_dim": 256,
         "descriptor_dim": 256,
         "add_scale_ori": False,
         "n_layers": 9,
@@ -413,7 +414,8 @@ class LightGlue(MatcherModel):
             "confidence_thresholds",
             torch.Tensor([self.confidence_threshold(i) for i in range(self.conf.n_layers)]),
         )
-
+        # TODO: work on this part, try to get clean state_dict for strict loading.
+        # TODO: either by correct naming or provied renamed state_dict.
         state_dict = None
         if features is not None:
             fname = f"{conf.weights}_{self.version.replace('.', '-')}.pth"

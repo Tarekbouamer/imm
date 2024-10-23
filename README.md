@@ -74,32 +74,46 @@ docker run -it --gpus all imm:latest
 
 ## Supported Algorithms
 
+<!-- TODO: add all supported algorithms -->
+<!-- TODO: add naming conventions for the algorithms, and all variants -->
+<!-- TODO: add link to the original papers -->
+<!-- TODO: add type of each matcher and extractors  -->
+<!-- TODO: add feature to save the results in a h5 file -->
+<!-- TODO: align with visloc library -->
+
 ImMatch supports a wide range of feature extractors, matchers, and geometric estimators. Here's an overview:
 
 ### Supported Extractors
 
-| Extractor Name | Type | Description |
-|----------------|------|-------------|
-| SuperPoint     |      |             |
-| D2-Net         |      |             |
-| R2D2           |      |             |
-| DISK           |      |             |
+| Extractor      |
+|----------------|
+| Caps           |
+| D2-Net         |
+| DISK           |
+| R2D2           |
+| Superpoint     |
+| XFeat          |
 
 ### Supported Matchers
 
-| Matcher Name | Type | Description |
-|--------------|------|-------------|
-| SuperGlue    |      |             |
-| LoFTR        |      |             |
+| Matcher      |
+|--------------|
+| Aspanformer  |
+| DKM          |
+| Lightglue    |
+| Lighterglue  |
+| LoFTR        |
+| NN           |  
+| Superglue    |
 
 ### Supported Estimators
 
-| Estimator Name     | Description |
-|--------------------|-------------|
-| Fundamental Matrix |             |
-| Essential Matrix   |             |
-| Homography         |             |
-| PnP                |             |
+| Estimator          | PoseLib          | PyColmap         | OpenCV           |
+|--------------------|:----------------:|:----------------:|:----------------:|
+| Fundamental Matrix |                  |                  |                  |
+| Essential Matrix   |                  |                  |                  |
+| Homography         |:white_check_mark:|                  |:white_check_mark:|
+| PnP                |:white_check_mark:|:white_check_mark:|                  |
 
 ## Usage
 
@@ -143,38 +157,14 @@ Example:
 imm-match path/to/image1.jpg path/to/image2.jpg --matcher superglue_outdoor --extractor superpoint --max_size 1000 --output_dir my_results --threshold 0.2 --visualize --use_gpu
 ```
 
-<!-- ### Geometric Estimation
+### Gradio Interface 🌐 (:construction:)
 
-Use the `imm-estimate` script to perform geometric estimation:
+ImMatch also provides a Gradio interface for all the supported matching algorithms. To run the GUI, use the following command:
 
 ```bash
-imm-estimate IMG0_PATH IMG1_PATH --estimator ESTIMATOR_NAME [OPTIONS]
+imm-gui 
+
+# default: Running on local URL:  http://127.0.0.1:7860
 ```
 
-Example:
-
-```bash
-imm-estimate path/to/image1.jpg path/to/image2.jpg --estimator ransac --model fundamental_matrix --threshold 1.0 --confidence 0.99 --max_iters 1000
-```
-
-For more detailed information on usage and available options, use the `--help` flag with each command:
-
-```bash
-imm-extract --help
-imm-match --help
-imm-estimate --help
-``` -->
-
-<!-- ## Additional Information
-
-For more details on using specific extractors, matchers, and estimators, including their parameters and best practices, please refer to the [ImMatch documentation](https://github.com/Tarekbouamer/imm/docs) (replace with actual documentation link when available).
-
-For bug reports, feature requests, or contributions, please visit the [ImMatch GitHub repository](https://github.com/Tarekbouamer/imm). -->
-
-<!-- ## Acknowledgements
-
-We would like to thank the open-source community and the authors of the algorithms implemented in ImMatch for their invaluable contributions to the field of computer vision.
-
-## License
-
-[Include license information here] -->
+Full guideline is available on the gradio interface web page.

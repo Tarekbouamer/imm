@@ -8,7 +8,8 @@ from datetime import datetime
 
 from imm.extractors import __all__ as extractor_names
 from imm.matchers import __all__ as matcher_names
-from scripts.image_matching import ImageMatcher
+from imm.image_matching import ImageMatcher
+from imm.utils.warnings import suppress_warnings
 
 
 COLOR_SCHEMES = {
@@ -78,7 +79,7 @@ class ImageMatchingGradioApp:
                     max_size_input = gr.Slider(200, 2048, value=640, step=1, label="Max Image Size")
                     max_keypoints_input = gr.Slider(0, 4096, value=1024, step=1, label="Max Keypoints")
                 with gr.Column():
-                    min_conf_input = gr.Slider(0.0, 1.0, value=0.0, step=0.0, label="Min Confidence")
+                    min_conf_input = gr.Slider(0.0, 1.0, value=0.0, step=0.01, label="Min Confidence")
                     use_gpu_input = gr.Checkbox(value=False, label="Use GPU (if available)")
 
             with gr.Accordion("Advanced Options", open=False):
@@ -419,6 +420,13 @@ class ImageMatchingGradioApp:
         demo.launch()
 
 
-if __name__ == "__main__":
+@suppress_warnings()
+def main():
     app = ImageMatchingGradioApp()
     app.launch()
+
+
+if __name__ == "__main__":
+    main()
+
+# TODO: variable image size and max_keypoints are not affecting the output

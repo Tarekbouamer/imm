@@ -9,7 +9,7 @@ from .r2d2net import (
     r2d2_WASF_N16,
 )
 from .superpoint import superpoint
-# from .xfeat import xfeat
+from .xfeat import xfeat_sparse, xfeat_dense
 
 __all__ = [
     "caps_sp",
@@ -24,4 +24,6 @@ __all__ = [
     "r2d2_WASF_N8_big",
     "r2d2_WASF_N16",
     "superpoint",
+    "xfeat_sparse",
+    "xfeat_dense",
 ]

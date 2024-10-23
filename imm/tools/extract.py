@@ -34,21 +34,20 @@ def extract(model: str, img_path: str, max_keypoints: int):
     #
     kpts, scores, descriptors = (
         preds["kpts"],
-        preds["scores"],
+        preds["scores"] if "scores" in preds else None,
         preds["desc"],
     )
 
     if isinstance(kpts, list):
         kpts = kpts[0]
-        scores = scores[0]
+        scores = scores[0] if scores is not None else None
         descriptors = descriptors[0]
 
     if len(kpts.shape) == 3:
         kpts = kpts[0]
-        scores = scores[0]
+        scores = scores[0] if scores is not None else None
 
     logger.info(f"Keypoints: {kpts.shape}")
-    logger.info(f"Scores: {scores.shape}")
     logger.info(f"Descriptors: {descriptors.shape}")
 
     # visualize

@@ -106,7 +106,7 @@ class MatcherModel(ModelBase):
             raise RuntimeWarning("match() should be called in eval mode")
 
         for k in self.required_inputs:
-            assert k in data, f"Missing required input '{k}'"
+            assert k in data, f"Missing required input '{k}', we got {data.keys()}"
 
         data = self.transform_inputs(data)
         preds = self.forward(data)
