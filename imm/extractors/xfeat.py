@@ -58,7 +58,8 @@ class XFeatModel(nn.Module):
 
         ########### ⬇️ CNN Backbone & Heads ⬇️ ###########
 
-        self.skip1 = nn.Sequential(nn.AvgPool2d(4, stride=4), nn.Conv2d(1, 24, 1, stride=1, padding=0))
+        self.skip1 = nn.Sequential(nn.AvgPool2d(
+            4, stride=4), nn.Conv2d(1, 24, 1, stride=1, padding=0))
 
         self.block1 = nn.Sequential(
             BasicLayer(1, 4, stride=1),
@@ -133,7 +134,8 @@ class XFeatModel(nn.Module):
         Unfolds tensor in 2D with desired ws (window size) and concat the channels
         """
         B, C, H, W = x.shape
-        x = x.unfold(2, ws, ws).unfold(3, ws, ws).reshape(B, C, H // ws, W // ws, ws**2)
+        x = x.unfold(2, ws, ws).unfold(3, ws, ws).reshape(
+            B, C, H // ws, W // ws, ws**2)
         return x.permute(0, 1, 4, 2, 3).reshape(B, -1, H // ws, W // ws)
 
     def forward(self, x):
@@ -165,7 +167,8 @@ class XFeatModel(nn.Module):
 
         # heads
         heatmap = self.heatmap_head(feats)  # Reliability map
-        keypoints = self.keypoint_head(self._unfold2d(x, ws=8))  # Keypoint map logits
+        keypoints = self.keypoint_head(
+            self._unfold2d(x, ws=8))  # Keypoint map logits
 
         return feats, keypoints, heatmap
 
@@ -267,7 +270,8 @@ class XFeat(FeatureModel):
         # Compute reliability scores
         _nearest = InterpolateSparse2d("nearest")
         _bilinear = InterpolateSparse2d("bilinear")
-        scores = (_nearest(K1h, mkpts, _H1, _W1) * _bilinear(H1, mkpts, _H1, _W1)).squeeze(-1)
+        scores = (_nearest(K1h, mkpts, _H1, _W1) *
+                  _bilinear(H1, mkpts, _H1, _W1)).squeeze(-1)
         scores[torch.all(mkpts == 0, dim=-1)] = -1
 
         # Select top-k features
@@ -284,7 +288,8 @@ class XFeat(FeatureModel):
         feats = F.normalize(feats, dim=-1)
 
         # Correct kpt scale
-        mkpts = mkpts * torch.tensor([rw1, rh1], device=mkpts.device).view(1, 1, -1)
+        mkpts = mkpts * torch.tensor([rw1, rh1],
+                                     device=mkpts.device).view(1, 1, -1)
 
         valid = scores > 0
         return [
@@ -331,7 +336,8 @@ class XFeat(FeatureModel):
 
         """
         if not self.kornia_available:
-            raise RuntimeError("We rely on kornia for LightGlue. Install with: pip install kornia")
+            raise RuntimeError(
+                "We rely on kornia for LightGlue. Install with: pip install kornia")
         elif self.lighterglue is None:
             from modules.lighterglue import LighterGlue
 
@@ -375,7 +381,8 @@ class XFeat(FeatureModel):
         out1 = self.detectAndCompute(img1, top_k=top_k)[0]
         out2 = self.detectAndCompute(img2, top_k=top_k)[0]
 
-        idxs0, idxs1 = self.match(out1["descriptors"], out2["descriptors"], min_cossim=min_cossim)
+        idxs0, idxs1 = self.match(
+            out1["descriptors"], out2["descriptors"], min_cossim=min_cossim)
 
         return out1["keypoints"][idxs0].cpu().numpy(), out2["keypoints"][idxs1].cpu().numpy()
 
@@ -407,7 +414,8 @@ class XFeat(FeatureModel):
         # this part is harder to batch, currently iterate
         matches = []
         for b in range(B):
-            matches.append(self.refine_matches(out1, out2, matches=idxs_list, batch_idx=b))
+            matches.append(self.refine_matches(
+                out1, out2, matches=idxs_list, batch_idx=b))
 
         return (
             matches
@@ -442,7 +450,8 @@ class XFeat(FeatureModel):
     def NMS(self, x, threshold=0.05, kernel_size=5):
         B, _, H, W = x.shape
         pad = kernel_size // 2
-        local_max = nn.MaxPool2d(kernel_size=kernel_size, stride=1, padding=pad)(x)
+        local_max = nn.MaxPool2d(
+            kernel_size=kernel_size, stride=1, padding=pad)(x)
         pos = (x == local_max) & (x > threshold)
         pos_batched = [k.nonzero()[..., 1:].flip(-1) for k in pos]
 
@@ -484,7 +493,8 @@ class XFeat(FeatureModel):
 
     def subpix_softmax2d(self, heatmaps, temp=3):
         N, H, W = heatmaps.shape
-        heatmaps = torch.softmax(temp * heatmaps.view(-1, H * W), -1).view(-1, H, W)
+        heatmaps = torch.softmax(
+            temp * heatmaps.view(-1, H * W), -1).view(-1, H, W)
         x, y = torch.meshgrid(
             torch.arange(W, device=heatmaps.device),
             torch.arange(H, device=heatmaps.device),
@@ -495,7 +505,8 @@ class XFeat(FeatureModel):
 
         coords_x = x[None, ...] * heatmaps
         coords_y = y[None, ...] * heatmaps
-        coords = torch.cat([coords_x[..., None], coords_y[..., None]], -1).view(N, H * W, 2)
+        coords = torch.cat(
+            [coords_x[..., None], coords_y[..., None]], -1).view(N, H * W, 2)
         coords = coords.sum(1)
 
         return coords
@@ -571,13 +582,16 @@ class XFeat(FeatureModel):
 
         feats = torch.gather(M1, 1, top_k[..., None].expand(-1, -1, 64))
         mkpts = torch.gather(xy1, 1, top_k[..., None].expand(-1, -1, 2))
-        mkpts = mkpts * torch.tensor([rw1, rh1], device=mkpts.device).view(1, -1)
+        mkpts = mkpts * torch.tensor([rw1, rh1],
+                                     device=mkpts.device).view(1, -1)
 
         return mkpts, feats
 
     def extract_dualscale(self, x, top_k, s1=0.6, s2=1.3):
-        x1 = F.interpolate(x, scale_factor=s1, align_corners=False, mode="bilinear")
-        x2 = F.interpolate(x, scale_factor=s2, align_corners=False, mode="bilinear")
+        x1 = F.interpolate(x, scale_factor=s1,
+                           align_corners=False, mode="bilinear")
+        x2 = F.interpolate(x, scale_factor=s2,
+                           align_corners=False, mode="bilinear")
 
         B, _, _, _ = x.shape
 
@@ -606,6 +620,7 @@ class XFeat(FeatureModel):
             data["image"] = data["image"].unsqueeze(0)
 
         data["image"] = self.parse_input(data["image"])
+        data["size"] = data["image"].shape[-2:][::-1]
 
         return data
 
@@ -623,7 +638,7 @@ class XFeat(FeatureModel):
             kpts = kpts[0]
             desc = desc[0].T
 
-        return {"kpts": [kpts], "desc": [desc]}
+        return {"kpts": [kpts], "desc": [desc], "size": data["size"]}
 
 
 # default configurations

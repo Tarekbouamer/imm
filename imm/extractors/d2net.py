@@ -33,7 +33,10 @@ class D2Net(FeatureModel):
         image = data["image"].flip(1)  # RGB -> BGR
         norm = image.new_tensor([103.939, 116.779, 123.68])
         image = image * 255 - norm.view(1, 3, 1, 1)  # Caffe normalization
-        return {"image": image}
+        
+        data["image"] = image
+        data["size"] = data["image"].shape[-2:][::-1]
+        return data
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         # Extract features
@@ -69,7 +72,7 @@ class D2Net(FeatureModel):
         raw_descriptors, _, _ = interpolate_dense_features(fmap_keypoints, features[0])
         descriptors = F.normalize(raw_descriptors, dim=0)
 
-        return {"kpts": [keypoints], "scores": [scores], "desc": [descriptors]}
+        return {"kpts": [keypoints], "scores": [scores], "desc": [descriptors], "size": [data["size"]]}
 
 
 default_cfgs = {

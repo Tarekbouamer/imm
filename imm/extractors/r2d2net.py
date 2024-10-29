@@ -35,6 +35,7 @@ class R2d2Net(FeatureModel):
             data["image"] = data["image"].unsqueeze(0)
 
         image = tfn_image_net(data["image"])
+
         return image
 
     def forward(self, image):

@@ -17,7 +17,8 @@ def MLP(channels: List[int], do_bn: bool = True) -> nn.Module:
     n = len(channels)
     layers = []
     for i in range(1, n):
-        layers.append(nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
+        layers.append(
+            nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
         if i < (n - 1):
             if do_bn:
                 layers.append(nn.BatchNorm1d(channels[i]))
@@ -28,8 +29,11 @@ def MLP(channels: List[int], do_bn: bool = True) -> nn.Module:
 def normalize_keypoints(kpts, image_shape):
     """Normalize keypoints locations based on image image_shape"""
 
-    # we modified image_shape to be a tensor of shape (2,),
-    width, height = image_shape
+    if image_shape.dim() == 2:
+        width, height = image_shape[0]
+    else:
+        width, height = image_shape
+
     one = kpts.new_tensor(1)
     size = torch.stack([one * width, one * height])[None]
     center = size / 2
@@ -70,7 +74,8 @@ class MultiHeadedAttention(nn.Module):
 
     def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
         batch_dim = query.size(0)
-        query, key, value = [layer(x).view(batch_dim, self.dim, self.num_heads, -1) for layer, x in zip(self.proj, (query, key, value))]
+        query, key, value = [layer(x).view(batch_dim, self.dim, self.num_heads, -1)
+                             for layer, x in zip(self.proj, (query, key, value))]
         x, _ = attention(query, key, value)
         return self.merge(x.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
 
@@ -90,7 +95,8 @@ class AttentionalPropagation(nn.Module):
 class AttentionalGNN(nn.Module):
     def __init__(self, feature_dim: int, layer_names: List[str]) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([AttentionalPropagation(feature_dim, 4) for _ in range(len(layer_names))])
+        self.layers = nn.ModuleList([AttentionalPropagation(
+            feature_dim, 4) for _ in range(len(layer_names))])
         self.names = layer_names
 
     def forward(self, desc0: torch.Tensor, desc1: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -123,7 +129,8 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     bins1 = alpha.expand(b, 1, n)
     alpha = alpha.expand(b, 1, 1)
 
-    couplings = torch.cat([torch.cat([scores, bins0], -1), torch.cat([bins1, alpha], -1)], 1)
+    couplings = torch.cat(
+        [torch.cat([scores, bins0], -1), torch.cat([bins1, alpha], -1)], 1)
 
     norm = -(ms + ns).log()
     log_mu = torch.cat([norm.expand(m), ns.log()[None] + norm])
@@ -155,7 +162,8 @@ class SuperGlue(MatcherModel):
     def __init__(self, cfg: Union[Dict[str, Any], DictConfig] = {}):
         super().__init__(cfg)
 
-        self.kenc = KeypointEncoder(self.cfg["descriptor_dim"], self.cfg["keypoint_encoder"])
+        self.kenc = KeypointEncoder(
+            self.cfg["descriptor_dim"], self.cfg["keypoint_encoder"])
 
         self.gnn = AttentionalGNN(
             feature_dim=self.cfg["descriptor_dim"],
@@ -180,6 +188,7 @@ class SuperGlue(MatcherModel):
         return data
 
     def process_matches(self, data: Dict[str, Any], preds: torch.Tensor) -> Dict[str, Any]:
+        
         # mutuals
         indices0 = preds["indices0"][0]
         mscores0 = preds["mscores0"][0]
@@ -197,12 +206,14 @@ class SuperGlue(MatcherModel):
         return {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
-            "mscores": scores,
             "kpts0": kpts0,
             "kpts1": kpts1,
+            "mscores": scores,
+            "matches": indices0  # TODO: do it in the same way for other matchers
         }
 
     def forward(self, data: dict, **kwargs: Any) -> dict:
+        
         # unpack
         kpts0, kpts1 = data["kpts0"], data["kpts1"]
         desc0, desc1 = data["desc0"], data["desc1"]
@@ -245,13 +256,16 @@ class SuperGlue(MatcherModel):
         scores = scores / self.cfg["descriptor_dim"] ** 0.5
 
         # Run the optimal transport.
-        scores = log_optimal_transport(scores, self.bin_score, iters=self.cfg["sinkhorn_iterations"])
+        scores = log_optimal_transport(
+            scores, self.bin_score, iters=self.cfg["sinkhorn_iterations"])
 
         # Get the matches with score above "match_threshold".
         max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
         indices0, indices1 = max0.indices, max1.indices
-        mutual0 = arange_like(indices0, 1)[None] == indices1.gather(1, indices0)
-        mutual1 = arange_like(indices1, 1)[None] == indices0.gather(1, indices1)
+        mutual0 = arange_like(indices0, 1)[
+            None] == indices1.gather(1, indices0)
+        mutual1 = arange_like(indices1, 1)[
+            None] == indices0.gather(1, indices1)
         zero = scores.new_tensor(0)
         mscores0 = torch.where(mutual0, max0.values.exp(), zero)
         mscores1 = torch.where(mutual1, mscores0.gather(1, indices1), zero)  # noqa: F841

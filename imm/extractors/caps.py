@@ -37,7 +37,8 @@ class CAPSnet(nn.Module):
         return coord_norm
 
     def sample_feat_by_coord(self, x, coord_n, norm=False):
-        feat = F.grid_sample(x, coord_n.unsqueeze(2), align_corners=True).squeeze(-1)
+        feat = F.grid_sample(x, coord_n.unsqueeze(
+            2), align_corners=True).squeeze(-1)
         if norm:
             feat = F.normalize(feat)
         feat = feat.transpose(1, 2)
@@ -56,6 +57,7 @@ class CAPS(FeatureModel):
         if data["image"].dim() == 3:
             data["image"] = data["image"].unsqueeze(0)
         data["image"] = tfn_image_net(data["image"])
+        data["size"] = data["image"].shape[-2:][::-1]
         return data
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, List[torch.Tensor]]:
@@ -79,7 +81,7 @@ class CAPS(FeatureModel):
 
         descriptors = torch.cat((feat_c, feat_f), -1).squeeze(0)
         descriptors = descriptors.T
-        return {"kpts": [kpts], "scores": [scores], "desc": [descriptors]}
+        return {"kpts": [kpts], "scores": [scores], "desc": [descriptors], "size": [data["size"]]}
 
 
 default_cfgs = {

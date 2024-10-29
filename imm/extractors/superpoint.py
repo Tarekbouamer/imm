@@ -40,7 +40,8 @@ class SuperPoint(FeatureModel):
         self.convPb = nn.Conv2d(c5, 65, kernel_size=1, stride=1, padding=0)
 
         self.convDa = nn.Conv2d(c4, c5, kernel_size=3, stride=1, padding=1)
-        self.convDb = nn.Conv2d(c5, self.cfg["descriptor_dim"], kernel_size=1, stride=1, padding=0)
+        self.convDb = nn.Conv2d(
+            c5, self.cfg["descriptor_dim"], kernel_size=1, stride=1, padding=0)
 
     def transform_inputs(self, data: Dict[str, Tensor]) -> Dict[str, Tensor]:
         # to 4D
@@ -49,6 +50,8 @@ class SuperPoint(FeatureModel):
 
         # grayscale
         data["image"] = tfn_grayscale(data["image"])
+        B, C, H, W = data["image"].shape
+        data["size"] = torch.tensor([W, H])
 
         return data
 
@@ -76,15 +79,18 @@ class SuperPoint(FeatureModel):
         scores = simple_nms(scores, self.cfg["nms_radius"])
 
         # Extract keypoints
-        keypoints = [torch.nonzero(s > self.cfg["keypoint_threshold"]) for s in scores]
+        keypoints = [torch.nonzero(
+            s > self.cfg["keypoint_threshold"]) for s in scores]
         scores = [s[tuple(k.t())] for s, k in zip(scores, keypoints)]
 
         # Discard keypoints near the image borders
-        keypoints, scores = list(zip(*[remove_borders(k, s, self.cfg["remove_borders"], h * 8, w * 8) for k, s in zip(keypoints, scores)]))
+        keypoints, scores = list(zip(
+            *[remove_borders(k, s, self.cfg["remove_borders"], h * 8, w * 8) for k, s in zip(keypoints, scores)]))
 
         # Keep the k keypoints with highest score
         if self.cfg["max_keypoints"] >= 0:
-            keypoints, scores = list(zip(*[top_k_keypoints(k, s, self.cfg["max_keypoints"]) for k, s in zip(keypoints, scores)]))
+            keypoints, scores = list(zip(
+                *[top_k_keypoints(k, s, self.cfg["max_keypoints"]) for k, s in zip(keypoints, scores)]))
 
         # Convert (h, w) to (x, y)
         keypoints = [torch.flip(k, [1]).float() for k in keypoints]
@@ -95,12 +101,10 @@ class SuperPoint(FeatureModel):
         descriptors = torch.nn.functional.normalize(descriptors, p=2, dim=1)
 
         # Extract descriptors
-        descriptors = [sample_descriptors(k[None], d[None], 8)[0] for k, d in zip(keypoints, descriptors)]
+        descriptors = [sample_descriptors(k[None], d[None], 8)[
+            0] for k, d in zip(keypoints, descriptors)]
 
-        #
-        # descriptors = [d.permute(1, 0) for d in descriptors]
-
-        return {"kpts": keypoints, "scores": list(scores), "desc": descriptors}
+        return {"kpts": keypoints, "scores": list(scores), "desc": descriptors, "size": data["size"]}
 
 
 # default configurations

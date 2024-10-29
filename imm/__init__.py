@@ -7,8 +7,3 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
     logger.warning("Could not import loguru")
-
-
-from .feature_matcher import ExtractorManager, FeaturesWriter
-
-__all__ = ["ExtractorManager", "FeaturesWriter"]

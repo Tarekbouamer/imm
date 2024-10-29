@@ -50,8 +50,10 @@ class DISK(FeatureModel):
 
         image = F.pad(image, (0, new_w - orig_w, 0, new_h - orig_h))
         self.ori_size = (orig_w, orig_h)
+        data["image"] = image
+        data["size"] = data["image"].shape[-2:][::-1]
 
-        return {"image": image}
+        return data
 
     def extract_features(self, data):
         #
@@ -64,7 +66,7 @@ class DISK(FeatureModel):
             features = self.extract_features(data)
 
         assert features.shape[1] == self.desc_dim + 1
-        heatmap = features[:, self.desc_dim :]
+        heatmap = features[:, self.desc_dim:]
 
         _keypoints = self.detector.nms(heatmap)
 
@@ -74,7 +76,8 @@ class DISK(FeatureModel):
 
         # valid
         orig_w, orig_h = self.ori_size
-        valid = torch.all(keypoints <= keypoints.new_tensor([orig_w, orig_h]) - 1, 1)
+        valid = torch.all(keypoints <= keypoints.new_tensor(
+            [orig_w, orig_h]) - 1, 1)
         keypoints = keypoints[valid]
         scores = scores[valid]
 
@@ -121,6 +124,7 @@ class DISK(FeatureModel):
             "kpts": [kpts],
             "desc": [desc],
             "scores": [scores],
+            "size": data["size"],
         }
 
 

@@ -30,18 +30,18 @@ dependencies = [
 
 dynamic = ["readme", "version"]
 
-[tool.setuptools]
-py-modules = ["imm"]
+[tool.setuptools.packages.find]
+include = ["imm*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "imm.__version__" }
 readme = { file = "README.md" }
 
 [project.urls]
-"Homepage" = "https://github.com/Tarekbouamer/imm"
-"Documentation" = "https://github.com/Tarekbouamer/imm/wiki"
-"Source" = "https://github.com/Tarekbouamer/imm"
-"Tracker" = "https://github.com/Tarekbouamer/imm/issues"
+Homepage = "https://github.com/Tarekbouamer/imm"
+Documentation = "https://github.com/Tarekbouamer/imm/wiki"
+Source = "https://github.com/Tarekbouamer/imm"
+Tracker = "https://github.com/Tarekbouamer/imm/issues"
 
 [project.entry-points.console_scripts]
 imm-match = "imm.tools.match:match_images"
@@ -50,7 +50,5 @@ imm-gui = "imm.ui:main"
 
 [project.optional-dependencies]
 dev = ["black>=22.0", "flake8>=4.0", "isort>=5.0"]
-
 docs = ["sphinx>=4.0", "sphinx-rtd-theme>=0.5"]
-
 test = ["pytest>=6.0", "pytest-cov>=3.0", "tox>=3.0"]
