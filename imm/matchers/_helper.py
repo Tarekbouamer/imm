@@ -1,32 +1,10 @@
-from loguru import logger
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-import torch
+from loguru import logger
+
 from imm.registry.register import ModelRegistry
 
 MATCHERS_REGISTRY = ModelRegistry("matchers", location=__file__)
-
-
-def process_tensor_data(data: Any) -> Any:
-    if isinstance(data, torch.Tensor):
-        # Process single tensor
-        if data.dim() == 1:
-            return data.unsqueeze(0).unsqueeze(0)  # [D] -> [1, 1, D]
-        elif data.dim() == 2:
-            return data.unsqueeze(0)  # [N, D] -> [1, N, D]
-        elif data.dim() == 3:
-            return data  # Already 3D
-        else:
-            raise ValueError(f"Cannot convert tensor of shape {data.shape} to 3D")
-
-    elif isinstance(data, (list, tuple)) and all(isinstance(item, torch.Tensor) for item in data):
-        # Process list or tuple of tensors
-        stacked = torch.stack(data)
-        return process_tensor_data(stacked)  # Recursive call to ensure 3D
-
-    else:
-        # Return unchanged if not a tensor or list/tuple of tensors
-        return data
 
 
 def create_matcher(

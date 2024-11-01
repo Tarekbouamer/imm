@@ -33,7 +33,7 @@ class D2Net(FeatureModel):
         image = data["image"].flip(1)  # RGB -> BGR
         norm = image.new_tensor([103.939, 116.779, 123.68])
         image = image * 255 - norm.view(1, 3, 1, 1)  # Caffe normalization
-        
+
         data["image"] = image
         data["size"] = data["image"].shape[-2:][::-1]
         return data

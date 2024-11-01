@@ -26,8 +26,7 @@ class H5Writer:
         for key, value in data.items():
             if isinstance(value, torch.Tensor):
                 value = value.cpu().numpy()
-            self.hfile.create_dataset(
-                key, data=value, compression=self.compression)
+            self.hfile.create_dataset(key, data=value, compression=self.compression)
 
 
 class FeaturesWriter(H5Writer):
@@ -71,10 +70,8 @@ class MatchesWriter(H5Writer):
             for key, value in matches.items():
                 if isinstance(value, torch.Tensor):
                     value = value.cpu().numpy()
-                group.create_dataset(
-                    key, data=value, compression=self.compression)
+                group.create_dataset(key, data=value, compression=self.compression)
 
         except OSError as error:
-            logger.error(
-                f"Error writing matches for group {group_name}: {error}")
+            logger.error(f"Error writing matches for group {group_name}: {error}")
             raise

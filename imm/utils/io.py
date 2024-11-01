@@ -1,6 +1,10 @@
+from pathlib import Path
+from typing import List, Optional
+
 import cv2
 import numpy as np
 import torch
+from loguru import logger
 
 INTER_MODES: dict = {
     "linear": cv2.INTER_LINEAR,
@@ -8,6 +12,34 @@ INTER_MODES: dict = {
     "nearest": cv2.INTER_NEAREST,
     "area": cv2.INTER_AREA,
 }
+
+
+def find_images(image_path: Path, output_file: Optional[Path] = None) -> List[Path]:
+    """Find images in the specified path"""
+
+    # Search for image files in the specified path
+    image_files = [
+        file for ext in {"jpg", "jpeg", "png"} for file in list(image_path.rglob(f"*.{ext}")) + list(image_path.rglob(f"*.{ext.upper()}"))
+    ]
+
+    #
+    if not image_files:
+        logger.warning(f"No images found in {image_path}")
+        return []
+
+    # Write the list of images to a file
+    if output_file:
+        try:
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            with output_file.open("w") as f:
+                for image_file in image_files:
+                    relative_path = image_file.relative_to(image_path)
+                    f.write(f"{relative_path}\n")
+            logger.info(f"Image list written to {output_file}")
+        except Exception as e:
+            logger.error(f"Error writing to {output_file}: {e}")
+
+    return image_files
 
 
 def pad_image_bottom_right(img, pad_size, ret_mask=False):

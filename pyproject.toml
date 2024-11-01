@@ -46,6 +46,7 @@ Tracker = "https://github.com/Tarekbouamer/imm/issues"
 [project.entry-points.console_scripts]
 imm-match = "imm.tools.match:match_images"
 imm-extract = "imm.tools.extract:extract"
+imm-estimate = "imm.tools.estimate:estimate"
 imm-gui = "imm.ui:main"
 
 [project.optional-dependencies]

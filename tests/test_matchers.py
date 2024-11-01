@@ -6,7 +6,7 @@ import torch
 from imm.extractors._helper import create_extractor
 from imm.matchers._helper import MATCHERS_REGISTRY, create_matcher
 from imm.settings import img0_path, img1_path
-from imm.utils.device import to_numpy
+from imm.utils.device import detect_device, to_numpy
 from imm.utils.io import load_image_tensor
 from imm.utils.warnings import suppress_warnings
 
@@ -91,8 +91,7 @@ def validate_matches(matches):
 def test_all_registered_matchers():
     """Test all matchers provided in the TEST_MATCHERS list."""
     # Device selection
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    device = detect_device()
 
     # N
     N = len(TEST_MATCHERS)

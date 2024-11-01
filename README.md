@@ -15,9 +15,6 @@
   - [Feature Extraction](#feature-extraction)
   - [Feature Matching](#feature-matching)
   - [Geometric Estimation](#geometric-estimation)
-<!-- - [Additional Information](#additional-information)
-- [Acknowledgements](#acknowledgements)
-- [License](#license) -->
 
 ## Prerequisites
 
@@ -74,13 +71,6 @@ docker run -it --gpus all imm:latest
 
 ## Supported Algorithms
 
-<!-- TODO: add all supported algorithms -->
-<!-- TODO: add naming conventions for the algorithms, and all variants -->
-<!-- TODO: add link to the original papers -->
-<!-- TODO: add type of each matcher and extractors  -->
-<!-- TODO: add feature to save the results in a h5 file -->
-<!-- TODO: align with visloc library -->
-
 ImMatch supports a wide range of feature extractors, matchers, and geometric estimators. Here's an overview:
 
 ### Supported Extractors
@@ -121,40 +111,68 @@ ImMatch provides command-line tools for feature extraction, matching, and geomet
 
 ### Feature Extraction
 
-Use the `imm-extract` script to extract features from an image:
+Use the `imm-extract` script to extract features from an image or a folder of images:
 
 ```bash
-imm-extract --model MODEL_NAME --img_path PATH_TO_IMAGE --max_keypoints MAX_KEYPOINTS
-```
+# image
+imm-extract --model extractor --img_path /path/to/your/image.jpg --max_keypoints 1600
 
-Example:
+# dataset
+imm-extract --model extractor --img_path /path/to/your/dataset --output_dir /path/to/save/features --max_keypoints 1600
 
-```bash
-imm-extract --model superpoint --img_path /path/to/your/image.jpg --max_keypoints 1200
+  Options:
+    --model             Extractor name
+    --img_path          Path to the image or dataset
+    --output_dir        Path to save extracted features
+    --max_keypoints     Maximum number of keypoints
+    --batch_size        Batch size for dataset extraction
+    --num_workers       Number of workers for DataLoader
+
+# example
+imm-extract --model superpoint --img_path assets/graffiti.png --max_keypoints 1600
 ```
 
 ### Feature Matching
 
-Use the `imm-match` script to match features between two images:
+Use the `imm-match` script to match features between two images, extract features if needed :
 
 ```bash
 imm-match IMG0_PATH IMG1_PATH [OPTIONS]
+
+  Options:
+    --matcher         Matcher name
+    --extractor       Extractor name
+    --max_size        Max image size
+    --output_dir      Output directory for logs and visualization
+    --threshold       Matching score threshold
+    --visualize       Enable or disable visualization
+
+# example
+imm-match assets/graffiti.png assets/graffiti.png --matcher superglue_outdoor --extractor superpoint --max_size 1000 --output_dir results --threshold 0.2 --visualize
+
 ```
 
-Options:
+### Robust Estimation
 
-- `--matcher`: Matcher name (default: "superglue_outdoor")
-- `--extractor`: Extractor name (default: "superpoint")
-- `--max_size`: Max image size (optional)
-- `--output_dir`: Output directory for logs and visualization (default: "output")
-- `--threshold`: Matching score threshold (default: 0.1)
-- `--visualize/--no-visualize`: Enable or disable visualization (default: True)
-- `--use_gpu/--no-gpu`: Use GPU if available (default: True)
-
-Example:
+Use the `imm-estimate` script to estimate geometric relationships between two images:
 
 ```bash
-imm-match path/to/image1.jpg path/to/image2.jpg --matcher superglue_outdoor --extractor superpoint --max_size 1000 --output_dir my_results --threshold 0.2 --visualize --use_gpu
+imm-estimate IMG0_PATH IMG1_PATH [OPTIONS]
+
+  Options:
+    --estimator       Estimator name
+    --matcher         Matcher name
+    --extractor       Extractor name
+    --backend         Estimator backend "cv|poselib|pycolmap"
+    --solver          Homography solver "ransac|lmeds|rho|usac|usac_parallel|usac_accurate|usac_fast|usac_prosac|usac_magsac"              
+    --thd             Reprojection error threshold
+    --max_iters       Max iterations
+    --confidence      Confidence level
+    --max_size        Max image size
+    --output_dir      Output directory for logs and visualization
+
+# example
+imm-estimate assets/graffiti.png assets/graffiti.png --estimator homography --matcher superglue_outdoor --extractor superpoint --max_size 1000 --output_dir results --threshold 0.2 
 ```
 
 ### Gradio Interface 🌐 (:construction:)

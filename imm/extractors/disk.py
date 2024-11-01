@@ -66,7 +66,7 @@ class DISK(FeatureModel):
             features = self.extract_features(data)
 
         assert features.shape[1] == self.desc_dim + 1
-        heatmap = features[:, self.desc_dim:]
+        heatmap = features[:, self.desc_dim :]
 
         _keypoints = self.detector.nms(heatmap)
 
@@ -76,8 +76,7 @@ class DISK(FeatureModel):
 
         # valid
         orig_w, orig_h = self.ori_size
-        valid = torch.all(keypoints <= keypoints.new_tensor(
-            [orig_w, orig_h]) - 1, 1)
+        valid = torch.all(keypoints <= keypoints.new_tensor([orig_w, orig_h]) - 1, 1)
         keypoints = keypoints[valid]
         scores = scores[valid]
 

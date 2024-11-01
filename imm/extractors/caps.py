@@ -37,8 +37,7 @@ class CAPSnet(nn.Module):
         return coord_norm
 
     def sample_feat_by_coord(self, x, coord_n, norm=False):
-        feat = F.grid_sample(x, coord_n.unsqueeze(
-            2), align_corners=True).squeeze(-1)
+        feat = F.grid_sample(x, coord_n.unsqueeze(2), align_corners=True).squeeze(-1)
         if norm:
             feat = F.normalize(feat)
         feat = feat.transpose(1, 2)

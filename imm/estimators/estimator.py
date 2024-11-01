@@ -1,21 +1,18 @@
-from omegaconf import OmegaConf
+from typing import Any
 
 
 class Estimator:
-    default_cfg = {}
+    def __init__(self):
+        """Estimators."""
+        pass
 
-    def __init__(self, cfg=None):
-        # Merge default cfg with user cfg
-        if cfg is None:
-            cfg = {}
-        cfg = {**self.default_cfg, **cfg}
-        self.cfg = OmegaConf.create(cfg) if not isinstance(cfg, OmegaConf) else cfg
+    def estimate(self, *args) -> Any:
+        """Placeholder for the estimate method."""
+        raise NotImplementedError("The estimate method should be implemented in the derived class.")
 
-    def estimate(self, *args, **kwargs):
-        raise NotImplementedError("This method should be overridden by subclasses")
+    def __call__(self, *args) -> Any:
+        """Allow the estimator to be called like a function."""
+        return self.estimate(*args)
 
-    def __call__(self, *args, **kwargs):
-        return self.estimate(*args, **kwargs)
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(cfg={self.cfg})"
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"

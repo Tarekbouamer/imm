@@ -1,5 +1,18 @@
+from loguru import logger
 import torch
 import numpy as np
+
+
+def detect_device(force_cpu: bool = False) -> str:
+    """Detects the device to use."""
+
+    if force_cpu or not torch.cuda.is_available():
+        device = "cpu"
+    else:
+        device = "cuda"
+
+    logger.info(f"Using device: {device}")
+    return device
 
 
 def to_tensor(data):

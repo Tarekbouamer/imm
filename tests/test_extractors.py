@@ -2,7 +2,7 @@ import torch
 
 from imm.extractors._helper import EXTRACTORS_REGISTRY, create_extractor
 from imm.settings import img0_path
-from imm.utils.device import to_numpy
+from imm.utils.device import detect_device, to_numpy
 from imm.utils.io import load_image_tensor
 from imm.utils.warnings import suppress_warnings
 
@@ -44,8 +44,7 @@ def test_all_registered_extractors():
     """Test all registered extractors for correct keypoints, scores (optional), and descriptors extraction."""
 
     # Device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    device = detect_device()
 
     image = load_image_tensor(img0_path)[0].to(device)
 
