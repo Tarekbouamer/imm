@@ -1,15 +1,14 @@
 import copy
+import math
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops.einops import rearrange
-from torch.nn import Module
-
 from kornia.geometry.subpix import dsnt
 from kornia.utils.grid import create_meshgrid
-import math
+from torch.nn import Module
 
 if hasattr(F, "scaled_dot_product_attention"):
     FLASH_AVAILABLE = True
@@ -85,12 +84,24 @@ class RepVGGBlock(nn.Module):
                 padding_mode=padding_mode,
             )
         else:
-            self.rbr_identity = nn.BatchNorm2d(num_features=in_channels) if out_channels == in_channels and stride == 1 else None
+            self.rbr_identity = (
+                nn.BatchNorm2d(num_features=in_channels) if out_channels == in_channels and stride == 1 else None
+            )
             self.rbr_dense = conv_bn(
-                in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=groups
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                groups=groups,
             )
             self.rbr_1x1 = conv_bn(
-                in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=stride, padding=padding_11, groups=groups
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=1,
+                stride=stride,
+                padding=padding_11,
+                groups=groups,
             )
 
     def forward(self, inputs):
@@ -115,14 +126,24 @@ class RepVGGBlock(nn.Module):
     def get_custom_L2(self):
         K3 = self.rbr_dense.conv.weight
         K1 = self.rbr_1x1.conv.weight
-        t3 = (self.rbr_dense.bn.weight / ((self.rbr_dense.bn.running_var + self.rbr_dense.bn.eps).sqrt())).reshape(-1, 1, 1, 1).detach()
-        t1 = (self.rbr_1x1.bn.weight / ((self.rbr_1x1.bn.running_var + self.rbr_1x1.bn.eps).sqrt())).reshape(-1, 1, 1, 1).detach()
+        t3 = (
+            (self.rbr_dense.bn.weight / ((self.rbr_dense.bn.running_var + self.rbr_dense.bn.eps).sqrt()))
+            .reshape(-1, 1, 1, 1)
+            .detach()
+        )
+        t1 = (
+            (self.rbr_1x1.bn.weight / ((self.rbr_1x1.bn.running_var + self.rbr_1x1.bn.eps).sqrt()))
+            .reshape(-1, 1, 1, 1)
+            .detach()
+        )
 
         l2_loss_circle = (K3**2).sum() - (
             K3[:, :, 1:2, 1:2] ** 2
         ).sum()  # The L2 loss of the "circle" of weights in 3x3 kernel. Use regular L2 on them.
         eq_kernel = K3[:, :, 1:2, 1:2] * t3 + K1 * t1  # The equivalent resultant central point of 3x3 kernel.
-        l2_loss_eq_kernel = (eq_kernel**2 / (t3**2 + t1**2)).sum()  # Normalize for an L2 coefficient comparable to regular L2.
+        l2_loss_eq_kernel = (
+            eq_kernel**2 / (t3**2 + t1**2)
+        ).sum()  # Normalize for an L2 coefficient comparable to regular L2.
         return l2_loss_eq_kernel + l2_loss_circle
 
     #   This func derives the equivalent kernel and bias in a DIFFERENTIABLE way.
@@ -215,7 +236,13 @@ class RepVGG(nn.Module):
 
         self.in_planes = min(64, int(64 * width_multiplier[0]))
         self.stage0 = RepVGGBlock(
-            in_channels=1, out_channels=self.in_planes, kernel_size=3, stride=2, padding=1, deploy=self.deploy, use_se=self.use_se
+            in_channels=1,
+            out_channels=self.in_planes,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            deploy=self.deploy,
+            use_se=self.use_se,
         )
         self.cur_layer_idx = 1
         self.stage1 = self._make_stage(int(64 * width_multiplier[0]), num_blocks[0], stride=1)
@@ -294,7 +321,12 @@ class RepVGG_8_1_align(nn.Module):
         super().__init__()
         backbone = create_RepVGG(False)
 
-        self.layer0, self.layer1, self.layer2, self.layer3 = backbone.stage0, backbone.stage1, backbone.stage2, backbone.stage3
+        self.layer0, self.layer1, self.layer2, self.layer3 = (
+            backbone.stage0,
+            backbone.stage1,
+            backbone.stage2,
+            backbone.stage3,
+        )
 
         for layer in [self.layer0, self.layer1, self.layer2, self.layer3]:
             for m in layer.modules():
@@ -452,7 +484,12 @@ class FinePreprocess(nn.Module):
 
 
 def crop_feature(query, key, value, x_mask, source_mask):
-    mask_h0, mask_w0, mask_h1, mask_w1 = x_mask[0].sum(-2)[0], x_mask[0].sum(-1)[0], source_mask[0].sum(-2)[0], source_mask[0].sum(-1)[0]
+    mask_h0, mask_w0, mask_h1, mask_w1 = (
+        x_mask[0].sum(-2)[0],
+        x_mask[0].sum(-1)[0],
+        source_mask[0].sum(-2)[0],
+        source_mask[0].sum(-1)[0],
+    )
     query = query[:, :mask_h0, :mask_w0, :]
     key = key[:, :mask_h1, :mask_w1, :]
     value = value[:, :mask_h1, :mask_w1, :]
@@ -463,9 +500,25 @@ def pad_feature(m, mask_h0, mask_w0, x_mask):
     bs, L, H, D = m.size()
     m = m.view(bs, mask_h0, mask_w0, H, D)
     if mask_h0 != x_mask.size(-2):
-        m = torch.cat([m, torch.zeros(m.size(0), x_mask.size(-2) - mask_h0, x_mask.size(-1), H, D, device=m.device, dtype=m.dtype)], dim=1)
+        m = torch.cat(
+            [
+                m,
+                torch.zeros(
+                    m.size(0), x_mask.size(-2) - mask_h0, x_mask.size(-1), H, D, device=m.device, dtype=m.dtype
+                ),
+            ],
+            dim=1,
+        )
     elif mask_w0 != x_mask.size(-1):
-        m = torch.cat([m, torch.zeros(m.size(0), x_mask.size(-2), x_mask.size(-1) - mask_w0, H, D, device=m.device, dtype=m.dtype)], dim=2)
+        m = torch.cat(
+            [
+                m,
+                torch.zeros(
+                    m.size(0), x_mask.size(-2), x_mask.size(-1) - mask_w0, H, D, device=m.device, dtype=m.dtype
+                ),
+            ],
+            dim=2,
+        )
     return m
 
 
@@ -502,11 +555,13 @@ class Attention(Module):
 
         if self.flash:
             query, key, value = map(
-                lambda x: rearrange(x, "n h w (nhead d) -> n nhead (h w) d", nhead=self.nhead, d=self.dim), [query, key, value]
+                lambda x: rearrange(x, "n h w (nhead d) -> n nhead (h w) d", nhead=self.nhead, d=self.dim),
+                [query, key, value],
             )
         else:
             query, key, value = map(
-                lambda x: rearrange(x, "n h w (nhead d) -> n (h w) nhead d", nhead=self.nhead, d=self.dim), [query, key, value]
+                lambda x: rearrange(x, "n h w (nhead d) -> n (h w) nhead d", nhead=self.nhead, d=self.dim),
+                [query, key, value],
             )
 
         m = self.attention(query, key, value, q_mask=None, kv_mask=None)
@@ -542,7 +597,13 @@ class Attention(Module):
             m_list = []
             for i in range(bs):
                 m_list.append(
-                    self._forward(query[i : i + 1], key[i : i + 1], value[i : i + 1], q_mask=q_mask[i : i + 1], kv_mask=kv_mask[i : i + 1])
+                    self._forward(
+                        query[i : i + 1],
+                        key[i : i + 1],
+                        value[i : i + 1],
+                        q_mask=q_mask[i : i + 1],
+                        kv_mask=kv_mask[i : i + 1],
+                    )
                 )
             m = torch.cat(m_list, dim=0)
         return m
@@ -573,7 +634,11 @@ class AG_RoPE_EncoderLayer(nn.Module):
             if self.agg_size0 != 1
             else nn.Identity()
         )
-        self.max_pool = torch.nn.MaxPool2d(kernel_size=self.agg_size1, stride=self.agg_size1) if self.agg_size1 != 1 else nn.Identity()
+        self.max_pool = (
+            torch.nn.MaxPool2d(kernel_size=self.agg_size1, stride=self.agg_size1)
+            if self.agg_size1 != 1
+            else nn.Identity()
+        )
         if self.rope:
             self.rope_pos_enc = RoPEPositionEncodingSine(d_model, max_shape=(256, 256), npe=npe, ropefp16=True)
 
@@ -627,7 +692,9 @@ class AG_RoPE_EncoderLayer(nn.Module):
         # Upsample feature
         m = rearrange(m, "b (h w) c -> b c h w", h=H0 // self.agg_size0, w=W0 // self.agg_size0)  # [N, C, H0, W0]
         if self.agg_size0 != 1:
-            m = torch.nn.functional.interpolate(m, scale_factor=self.agg_size0, mode="bilinear", align_corners=False)  # [N, C, H0, W0]
+            m = torch.nn.functional.interpolate(
+                m, scale_factor=self.agg_size0, mode="bilinear", align_corners=False
+            )  # [N, C, H0, W0]
 
         # feed-forward network
         m = self.mlp(torch.cat([x, m], dim=1).permute(0, 2, 3, 1))  # [N, H0, W0, C]
@@ -671,7 +738,9 @@ class LocalFeatureTransformer(nn.Module):
             config["npe"],
             self.fp32,
         )
-        self.layers = nn.ModuleList([copy.deepcopy(self_layer) if _ == "self" else copy.deepcopy(cross_layer) for _ in self.layer_names])
+        self.layers = nn.ModuleList(
+            [copy.deepcopy(self_layer) if _ == "self" else copy.deepcopy(cross_layer) for _ in self.layer_names]
+        )
         self._reset_parameters()
 
     def _reset_parameters(self):
@@ -693,7 +762,12 @@ class LocalFeatureTransformer(nn.Module):
         feature_cropped = False
         if bs == 1 and mask0 is not None and mask1 is not None:
             mask_H0, mask_W0, mask_H1, mask_W1 = mask0.size(-2), mask0.size(-1), mask1.size(-2), mask1.size(-1)
-            mask_h0, mask_w0, mask_h1, mask_w1 = mask0[0].sum(-2)[0], mask0[0].sum(-1)[0], mask1[0].sum(-2)[0], mask1[0].sum(-1)[0]
+            mask_h0, mask_w0, mask_h1, mask_w1 = (
+                mask0[0].sum(-2)[0],
+                mask0[0].sum(-1)[0],
+                mask1[0].sum(-2)[0],
+                mask1[0].sum(-1)[0],
+            )
             mask_h0, mask_w0, mask_h1, mask_w1 = (
                 mask_h0 // self.agg_size0 * self.agg_size0,
                 mask_w0 // self.agg_size0 * self.agg_size0,
@@ -720,15 +794,27 @@ class LocalFeatureTransformer(nn.Module):
             # padding feature
             bs, c, mask_h0, mask_w0 = feat0.size()
             if mask_h0 != mask_H0:
-                feat0 = torch.cat([feat0, torch.zeros(bs, c, mask_H0 - mask_h0, mask_W0, device=feat0.device, dtype=feat0.dtype)], dim=-2)
+                feat0 = torch.cat(
+                    [feat0, torch.zeros(bs, c, mask_H0 - mask_h0, mask_W0, device=feat0.device, dtype=feat0.dtype)],
+                    dim=-2,
+                )
             elif mask_w0 != mask_W0:
-                feat0 = torch.cat([feat0, torch.zeros(bs, c, mask_H0, mask_W0 - mask_w0, device=feat0.device, dtype=feat0.dtype)], dim=-1)
+                feat0 = torch.cat(
+                    [feat0, torch.zeros(bs, c, mask_H0, mask_W0 - mask_w0, device=feat0.device, dtype=feat0.dtype)],
+                    dim=-1,
+                )
 
             bs, c, mask_h1, mask_w1 = feat1.size()
             if mask_h1 != mask_H1:
-                feat1 = torch.cat([feat1, torch.zeros(bs, c, mask_H1 - mask_h1, mask_W1, device=feat1.device, dtype=feat1.dtype)], dim=-2)
+                feat1 = torch.cat(
+                    [feat1, torch.zeros(bs, c, mask_H1 - mask_h1, mask_W1, device=feat1.device, dtype=feat1.dtype)],
+                    dim=-2,
+                )
             elif mask_w1 != mask_W1:
-                feat1 = torch.cat([feat1, torch.zeros(bs, c, mask_H1, mask_W1 - mask_w1, device=feat1.device, dtype=feat1.dtype)], dim=-1)
+                feat1 = torch.cat(
+                    [feat1, torch.zeros(bs, c, mask_H1, mask_W1 - mask_w1, device=feat1.device, dtype=feat1.dtype)],
+                    dim=-1,
+                )
 
         return feat0, feat1
 
@@ -783,7 +869,9 @@ class RoPEPositionEncodingSine(nn.Module):
         Args:
             x: [N, H, W, C]
         """
-        return (x * self.cos[:, : x.size(1), : x.size(2), :]) + (self.rotate_half(x) * self.sin[:, : x.size(1), : x.size(2), :])
+        return (x * self.cos[:, : x.size(1), : x.size(2), :]) + (
+            self.rotate_half(x) * self.sin[:, : x.size(1), : x.size(2), :]
+        )
 
     def rotate_half(self, x):
         x = x.unflatten(-1, (-1, 2))
@@ -923,7 +1011,12 @@ class CoarseMatching(nn.Module):
                 'mkpts1_c' (torch.Tensor): [M, 2],
                 'mconf' (torch.Tensor): [M]}
         """
-        axes_lengths = {"h0c": data["hw0_c"][0], "w0c": data["hw0_c"][1], "h1c": data["hw1_c"][0], "w1c": data["hw1_c"][1]}
+        axes_lengths = {
+            "h0c": data["hw0_c"][0],
+            "w0c": data["hw0_c"][1],
+            "h1c": data["hw1_c"][0],
+            "w1c": data["hw1_c"][1],
+        }
         _device = conf_matrix.device
         # 1. confidence thresholding
         mask = conf_matrix > self.thr
@@ -936,7 +1029,11 @@ class CoarseMatching(nn.Module):
         mask = rearrange(mask, "b h0c w0c h1c w1c -> b (h0c w0c) (h1c w1c)", **axes_lengths)
 
         # 2. mutual nearest
-        mask = mask * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0]) * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
+        mask = (
+            mask
+            * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0])
+            * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
+        )
 
         # 3. find all valid coarse matches
         # this only works when at most one `True` in each row
@@ -963,17 +1060,26 @@ class CoarseMatching(nn.Module):
             if num_matches_pred <= num_matches_train - self.train_pad_num_gt_min:
                 pred_indices = torch.arange(num_matches_pred, device=_device)
             else:
-                pred_indices = torch.randint(num_matches_pred, (num_matches_train - self.train_pad_num_gt_min,), device=_device)
+                pred_indices = torch.randint(
+                    num_matches_pred, (num_matches_train - self.train_pad_num_gt_min,), device=_device
+                )
 
             # gt_pad_indices is to select from gt padding. e.g. max(3787-4800, 200)
             gt_pad_indices = torch.randint(
-                len(data["spv_b_ids"]), (max(num_matches_train - num_matches_pred, self.train_pad_num_gt_min),), device=_device
+                len(data["spv_b_ids"]),
+                (max(num_matches_train - num_matches_pred, self.train_pad_num_gt_min),),
+                device=_device,
             )
             mconf_gt = torch.zeros(len(data["spv_b_ids"]), device=_device)  # set conf of gt paddings to all zero
 
             b_ids, i_ids, j_ids, mconf = map(
                 lambda x, y: torch.cat([x[pred_indices], y[gt_pad_indices]], dim=0),
-                *zip([b_ids, data["spv_b_ids"]], [i_ids, data["spv_i_ids"]], [j_ids, data["spv_j_ids"]], [mconf, mconf_gt]),
+                *zip(
+                    [b_ids, data["spv_b_ids"]],
+                    [i_ids, data["spv_i_ids"]],
+                    [j_ids, data["spv_j_ids"]],
+                    [mconf, mconf_gt],
+                ),
             )
 
         # These matches select patches that feed into fine-level network
@@ -1049,7 +1155,10 @@ class FineMatching(nn.Module):
         # compute pixel-level confidence matrix
         with torch.autocast(enabled=True if not (self.training or self.validate) else False, device_type="cuda"):
             feat_f0, feat_f1 = feat_0[..., : -self.local_regress_slicedim], feat_1[..., : -self.local_regress_slicedim]
-            feat_ff0, feat_ff1 = feat_0[..., -self.local_regress_slicedim :], feat_1[..., -self.local_regress_slicedim :]
+            feat_ff0, feat_ff1 = (
+                feat_0[..., -self.local_regress_slicedim :],
+                feat_1[..., -self.local_regress_slicedim :],
+            )
             feat_f0, feat_f1 = feat_f0 / C**0.5, feat_f1 / C**0.5
             conf_matrix_f = torch.einsum("mlc,mrc->mlr", feat_f0, feat_f1)
             conf_matrix_ff = torch.einsum("mlc,mrc->mlr", feat_ff0, feat_ff1 / (self.local_regress_slicedim) ** 0.5)
@@ -1072,7 +1181,12 @@ class FineMatching(nn.Module):
         m_ids = m_ids[: len(data["mconf"])]
         idx_r_iids, idx_r_jids = idx_r // W, idx_r % W
 
-        m_ids, idx_l, idx_r_iids, idx_r_jids = m_ids.reshape(-1), idx_l.reshape(-1), idx_r_iids.reshape(-1), idx_r_jids.reshape(-1)
+        m_ids, idx_l, idx_r_iids, idx_r_jids = (
+            m_ids.reshape(-1),
+            idx_l.reshape(-1),
+            idx_r_iids.reshape(-1),
+            idx_r_jids.reshape(-1),
+        )
         delta = create_meshgrid(3, 3, True, conf_matrix_ff.device).to(torch.long)  # [1, 3, 3, 2]
 
         m_ids = m_ids[..., None, None].expand(-1, 3, 3)
@@ -1104,7 +1218,8 @@ class FineMatching(nn.Module):
             scale1 = scale * data["scale1"] if "scale0" in data else scale
         else:
             scale1 = (
-                scale * data["scale1"][data["b_ids"]][: len(data["mconf"]), ...][:, None, :].expand(-1, -1, 2).reshape(-1, 2)
+                scale
+                * data["scale1"][data["b_ids"]][: len(data["mconf"]), ...][:, None, :].expand(-1, -1, 2).reshape(-1, 2)
                 if "scale0" in data
                 else scale
             )
@@ -1136,7 +1251,9 @@ class FineMatching(nn.Module):
         data.update({"idx_l": idx_l, "idx_r": idx_r})
 
         if self.fp16:
-            grid = create_meshgrid(W, W, False, conf_matrix.device, dtype=torch.float16) - W // 2 + 0.5  # kornia >= 0.5.1
+            grid = (
+                create_meshgrid(W, W, False, conf_matrix.device, dtype=torch.float16) - W // 2 + 0.5
+            )  # kornia >= 0.5.1
         else:
             grid = create_meshgrid(W, W, False, conf_matrix.device) - W // 2 + 0.5
         grid = grid.reshape(1, -1, 2).expand(m, -1, -1)
@@ -1147,8 +1264,12 @@ class FineMatching(nn.Module):
         scale1 = scale * data["scale1"][data["b_ids"]] if "scale0" in data else scale
 
         if torch.is_tensor(scale0) and scale0.numel() > 1:  # scale0 is a tensor
-            mkpts0_f = (data["mkpts0_c"][:, None, :] + (delta_l * scale0[: len(data["mconf"]), ...][:, None, :])).reshape(-1, 2)
-            mkpts1_f = (data["mkpts1_c"][:, None, :] + (delta_r * scale1[: len(data["mconf"]), ...][:, None, :])).reshape(-1, 2)
+            mkpts0_f = (
+                data["mkpts0_c"][:, None, :] + (delta_l * scale0[: len(data["mconf"]), ...][:, None, :])
+            ).reshape(-1, 2)
+            mkpts1_f = (
+                data["mkpts1_c"][:, None, :] + (delta_r * scale1[: len(data["mconf"]), ...][:, None, :])
+            ).reshape(-1, 2)
         else:  # scale0 is a float
             mkpts0_f = (data["mkpts0_c"][:, None, :] + (delta_l * scale0)).reshape(-1, 2)
             mkpts1_f = (data["mkpts1_c"][:, None, :] + (delta_r * scale1)).reshape(-1, 2)

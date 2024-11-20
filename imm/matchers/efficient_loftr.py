@@ -1,17 +1,23 @@
 from typing import Dict
 
 import torch
+import torchvision.transforms as tfm
 from einops.einops import rearrange
 from loguru import logger
 from pyparsing import Any
-import torchvision.transforms as tfm
 
 from imm.base.matcher import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY
 from imm.misc import _cfg
 from imm.registry.factory import load_model_weights
 
-from .modules.efficient_loftr_modules import CoarseMatching, FineMatching, FinePreprocess, LocalFeatureTransformer, build_backbone
+from .modules.efficient_loftr_modules import (
+    CoarseMatching,
+    FineMatching,
+    FinePreprocess,
+    LocalFeatureTransformer,
+    build_backbone,
+)
 
 
 def detect_NaN(feat_0, feat_1):
@@ -130,9 +136,10 @@ class EfficinetLoFTR(MatcherModel):
         return {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
+            "kpts0": kpts0,
+            "kpts1": kpts1,
+            "matches": matches,
             "mscores": mscores,
-            "kpts0": torch.empty(0, 2),
-            "kpts1": torch.empty(0, 2),
         }
 
     def forward(self, data):
@@ -222,7 +229,9 @@ class EfficinetLoFTR(MatcherModel):
         feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_c0, feat_c1, out_data)
 
         # detect NaN during mixed precision training
-        if self.cfg["replace_nan"] and (torch.any(torch.isnan(feat_f0_unfold)) or torch.any(torch.isnan(feat_f1_unfold))):
+        if self.cfg["replace_nan"] and (
+            torch.any(torch.isnan(feat_f0_unfold)) or torch.any(torch.isnan(feat_f1_unfold))
+        ):
             detect_NaN(feat_f0_unfold, feat_f1_unfold)
 
         del feat_c0, feat_c1, mask_c0, mask_c1

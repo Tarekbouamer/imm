@@ -1,16 +1,16 @@
-import gradio as gr
-from typing import Dict, List, Union, Tuple, Optional
-import cv2
-import numpy as np
-import torch
 import json
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Union
+
+import cv2
+import gradio as gr
+import numpy as np
+import torch
 
 from imm.extractors import __all__ as extractor_names
 from imm.matchers import __all__ as matcher_names
-from imm.image_matching import ImageMatcher
+from imm.tools.match import Matching
 from imm.utils.warnings import suppress_warnings
-
 
 COLOR_SCHEMES = {
     "Default": [(0, 0, 255), (0, 255, 0), (255, 0, 0)],
@@ -31,7 +31,7 @@ class ImageMatchingGradioApp:
         .input-image {height: 300px; object-fit: contain;}
         .advanced-options {border: 1px solid #ddd; padding: 10px; margin-top: 10px;}
         """
-        self.image_matcher: Optional[ImageMatcher] = None
+        self.image_matcher: Optional[str] = None
         self.history: List[List[Union[str, int, float]]] = []
 
     def build_interface(self) -> gr.Blocks:
@@ -80,7 +80,7 @@ class ImageMatchingGradioApp:
                     max_keypoints_input = gr.Slider(0, 4096, value=1024, step=1, label="Max Keypoints")
                 with gr.Column():
                     min_conf_input = gr.Slider(0.0, 1.0, value=0.0, step=0.01, label="Min Confidence")
-                    use_gpu_input = gr.Checkbox(value=False, label="Use GPU (if available)")
+                    use_gpu_input = gr.Checkbox(value=True, label="Use GPU (if available)")
 
             with gr.Accordion("Advanced Options", open=False):
                 with gr.Row(elem_classes="advanced-options"):
@@ -186,13 +186,29 @@ class ImageMatchingGradioApp:
         return {}
 
     @staticmethod
-    def cv_to_tensor(image: np.ndarray) -> torch.Tensor:
+    def cv_to_tensor(image: np.ndarray, max_size: int) -> torch.Tensor:
         """Converts an image from OpenCV format to a PyTorch tensor, normalizing the pixel values."""
+
+        # Resize image
+        h, w = image.shape[:2]
+
+        # target size
+        if h > w:
+            new_h = max_size
+            new_w = int(w * max_size / h)
+        else:
+            new_w = max_size
+            new_h = int(h * max_size / w)
+
+        image = cv2.resize(image, (new_w, new_h))
+        scale = np.array([w / new_w, h / new_h])
+
+        # Convert image to PyTorch tensor
         image = torch.from_numpy(image).permute(2, 0, 1).float()
 
         # Normalize image
         image = image / 255.0
-        return image
+        return image, scale
 
     def match_images(
         self,
@@ -202,7 +218,7 @@ class ImageMatchingGradioApp:
         matcher: str,
         max_size: int,
         max_keypoints: int,
-        min_conf: float,
+        min_conf: float,  # FIXME: add min_conf for extraction
         use_gpu: bool,
         force_cpu: bool,
         overlay_lines: bool,
@@ -214,46 +230,39 @@ class ImageMatchingGradioApp:
         """Matches two images using the specified extractor and matcher, and returns the matched image and statistics."""
         # Initialize ImageMatcher with selected extractor and matcher
         use_gpu = use_gpu and not force_cpu
-        self.image_matcher = ImageMatcher(extractor, matcher, use_gpu)
 
         # Convert images from OpenCV format to PyTorch tensors
-        image0 = self.cv_to_tensor(image0_cv)
-        image1 = self.cv_to_tensor(image1_cv)
+        image0, scale0 = self.cv_to_tensor(image0_cv, max_size)
+        image1, scale1 = self.cv_to_tensor(image1_cv, max_size)
 
         # Cuda
         if use_gpu:
             image0 = image0.cuda()
             image1 = image1.cuda()
 
-        # Perform image matching
-        results = self.image_matcher.match_pairs(
-            image0,
-            image1,
-            max_size=max_size,
-            min_conf=min_conf,
+        # Match images
+        self.image_matcher = Matching(
+            matcher_name=matcher,
+            extractor_name=extractor,
             max_keypoints=max_keypoints,
-            image0_cv=image0_cv,
-            image1_cv=image1_cv,
+            device="cuda" if use_gpu else "cpu",
         )
 
-        mkpts0 = results["matches"]["mkpts0"]
-        mkpts1 = results["matches"]["mkpts1"]
-        mscores = results["matches"]["mscores"]
+        results = self.image_matcher.match_images(image0, image1)
 
-        num_mkpts0 = len(mkpts0)
-        num_mkpts1 = len(mkpts1)
-        score_mean = float(np.mean(mscores)) if len(mscores) > 0 else 0
-        score_std = float(np.std(mscores)) if len(mscores) > 0 else 0
+        # Scale to original image size
+        results["kpts0"] = np.array([kpt * scale0 for kpt in results["kpts0"]])
+        results["mkpts0"] = np.array([kpt * scale0 for kpt in results["mkpts0"]])
+        results["kpts1"] = np.array([kpt * scale1 for kpt in results["kpts1"]])
+        results["mkpts1"] = np.array([kpt * scale1 for kpt in results["mkpts1"]])
 
+        score_mean = np.mean(results["mscores"]) if results["mscores"] is not None else 0.0
         stats = {
-            "# keypoints in image0": num_mkpts0,
-            "# keypoints in image1": num_mkpts1,
-            "# matches": len(mscores),
-            "Mean score": score_mean,
-            "Std score": score_std,
+            "# keypoints in image0": len(results["kpts0"]),
+            "# keypoints in image1": len(results["kpts1"]),
+            "# matches": len(results["mkpts0"]),
         }
 
-        # Custom visualization based on new parameters
         composite_image = self.custom_visualization(
             image0_cv,
             image1_cv,
@@ -266,7 +275,7 @@ class ImageMatchingGradioApp:
         )
 
         # Update history
-        self.update_history(extractor, matcher, len(mscores), score_mean)
+        self.update_history(extractor, matcher, len(results["mscores"]), score_mean)
 
         return composite_image, stats
 
@@ -289,11 +298,12 @@ class ImageMatchingGradioApp:
         # Create composite image
         composite_image = self.draw_composite_image(image1_rgb, image2_rgb, gap)
 
-        kpts0 = results["matches"].get("kpts0", [])
-        kpts1 = results["matches"].get("kpts1", [])
-        mkpts0 = results["matches"]["mkpts0"]
-        mkpts1 = results["matches"]["mkpts1"]
-        mscores = results["matches"]["mscores"]
+        kpts0 = results.get("kpts0", [])
+        kpts1 = results.get("kpts1", [])
+        mkpts0 = results["mkpts0"]
+        mkpts1 = results["mkpts1"]
+        mscores = results["mscores"]
+        matches = results["matches"]
 
         # Get color scheme
         color_inliers, color_outliers, color_lines = COLOR_SCHEMES[color_scheme]
@@ -338,6 +348,8 @@ class ImageMatchingGradioApp:
 
         # Draw matching lines
         if overlay_lines and mscores is not None:
+            valid = np.where(matches != -1)[0]
+            mscores = mscores[valid]
             for i, score in enumerate(mscores):
                 kp0 = mkpts0[i]
                 kp1_offset = (
@@ -428,5 +440,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# TODO: variable image size and max_keypoints are not affecting the output

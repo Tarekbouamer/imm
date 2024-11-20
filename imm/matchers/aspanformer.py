@@ -1,6 +1,6 @@
 import torch
-from einops.einops import rearrange
 import torchvision.transforms as tfn
+from einops.einops import rearrange
 
 from imm.base import MatcherModel
 from imm.matchers.modules.aspanformer_modules import (
@@ -142,8 +142,8 @@ class ASpanFormer(MatcherModel):
             "mscores": mscores,
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
-            "kpts0": torch.empty(0, 2),
-            "kpts1": torch.empty(0, 2),
+            "kpts0": mkpts0,
+            "kpts1": mkpts1,
         }
 
     def forward(self, data, online_resize=False):
@@ -338,23 +338,3 @@ def aspanformer_indoor(cfg=None, **kwargs):
 @MATCHERS_REGISTRY.register(name="aspanformer_outdoor", default_cfg=default_cfgs["aspanformer_outdoor"])
 def aspanformer_outdoor(cfg=None, **kwargs):
     return _make_model(name="aspanformer_outdoor", cfg=cfg, **kwargs)
-
-
-# if __name__ == "__main__":
-#     from core.visualization import plot_matches
-
-#     device = "cuda" if torch.cuda.is_available() else "cpu"
-
-#     path0 = "assets/phototourism_sample_images/st_pauls_cathedral_30776973_2635313996.jpg"
-#     path1 = "assets/phototourism_sample_images/st_pauls_cathedral_37347628_10902811376.jpg"
-
-#     matcher = create_matcher("aspanformer_outdoor")
-#     matcher = matcher.to(device)
-#     matcher = matcher.eval()
-
-#     with torch.no_grad():
-#         preds, image0, image1 = matcher.match_pairs(path0, path1, device=device, max_size=480)
-#         preds = to_numpy(preds)
-
-#     # show
-#     plot_matches(image0, image1, preds)

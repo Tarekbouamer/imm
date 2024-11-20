@@ -1,8 +1,10 @@
-from .estimator import Estimator
-import poselib
+from typing import Dict, Union
+
 import cv2
 import numpy as np
-from typing import Dict, Union
+import poselib
+
+from .estimator import Estimator
 
 
 def CHECK_DIM(pts: np.ndarray) -> bool:
@@ -28,7 +30,9 @@ CV_H_SOLVERS = {
 
 
 class CvHomographyEstimator(Estimator):
-    def __init__(self, solver: str = "ransac", ransac_th: float = 0.5, max_iters: int = 1000, confidence: float = 0.998):
+    def __init__(
+        self, solver: str = "ransac", ransac_th: float = 0.5, max_iters: int = 1000, confidence: float = 0.998
+    ):
         """
         Homography estimator using OpenCV.
 

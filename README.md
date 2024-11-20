@@ -96,6 +96,8 @@ ImMatch supports a wide range of feature extractors, matchers, and geometric est
 | NN           |  
 | Superglue    |
 
+(For more visualization on the supported algorithms, check out the [Gallery](Gallery.md).)
+
 ### Supported Estimators
 
 | Estimator          | PoseLib          | PyColmap         | OpenCV           |
@@ -142,13 +144,13 @@ imm-match IMG0_PATH IMG1_PATH [OPTIONS]
   Options:
     --matcher         Matcher name
     --extractor       Extractor name
-    --max_size        Max image size
+    --max_img_size        Max image size
     --output_dir      Output directory for logs and visualization
     --threshold       Matching score threshold
     --visualize       Enable or disable visualization
 
 # example
-imm-match assets/graffiti.png assets/graffiti.png --matcher superglue_outdoor --extractor superpoint --max_size 1000 --output_dir results --threshold 0.2 --visualize
+imm-match assets/graffiti.png assets/graffiti.png --matcher superglue_outdoor --extractor superpoint --max_img_size 1000 --output_dir results --threshold 0.2 --visualize
 
 ```
 
@@ -168,11 +170,11 @@ imm-estimate IMG0_PATH IMG1_PATH [OPTIONS]
     --thd             Reprojection error threshold
     --max_iters       Max iterations
     --confidence      Confidence level
-    --max_size        Max image size
+    --max_img_size        Max image size
     --output_dir      Output directory for logs and visualization
 
 # example
-imm-estimate assets/graffiti.png assets/graffiti.png --estimator homography --matcher superglue_outdoor --extractor superpoint --max_size 1000 --output_dir results --threshold 0.2 
+imm-estimate assets/graffiti.png assets/graffiti.png --estimator homography --matcher superglue_outdoor --extractor superpoint --max_img_size 1000 --output_dir results --threshold 0.2 
 ```
 
 ### Gradio Interface 🌐 (:construction:)

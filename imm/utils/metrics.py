@@ -3,10 +3,11 @@ from collections import OrderedDict
 import cv2
 import numpy as np
 import torch
-from imm.utils.device import to_numpy
 from kornia.geometry.conversions import convert_points_to_homogeneous
 from kornia.geometry.epipolar import numeric
 from loguru import logger
+
+from imm.utils.device import to_numpy
 
 
 def symmetric_epipolar_distance(pts0, pts1, E, K0, K1):

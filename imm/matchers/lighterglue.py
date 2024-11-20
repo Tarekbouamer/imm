@@ -1,13 +1,14 @@
 from typing import Any, Dict
 
-from .lightglue import LightGlue
-from torch import nn
 import torch
+from torch import nn
 
 from imm.base.matcher import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY
 from imm.misc import _cfg
 from imm.registry.factory import load_model_weights
+
+from .lightglue import LightGlue
 
 
 class LighterGlue(MatcherModel):
@@ -49,23 +50,25 @@ class LighterGlue(MatcherModel):
 
     def process_matches(self, data: Dict[str, Any], preds: torch.Tensor) -> Dict[str, Any]:
         #
-        matches = preds["matches"][0]
-        mscores = preds["scores"][0]
+        matches = preds["matches0"][0]
+        mscores = preds["mscores0"][0]
 
         kpts0 = data["kpts0"][0]
         kpts1 = data["kpts1"][0]
 
+        valid = torch.where(matches != -1)[0]
+
         # valid matches
-        mkpts0 = kpts0[matches[..., 0]]
-        mkpts1 = kpts1[matches[..., 1]]
+        mkpts0 = kpts0[valid]
+        mkpts1 = kpts1[matches[valid]]
 
         return {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
-            "mscores": mscores,
-            "matches": matches,
             "kpts0": kpts0,
             "kpts1": kpts1,
+            "mscores": mscores,
+            "matches": matches,
         }
 
     @torch.inference_mode()

@@ -1,36 +1,34 @@
+from .aspanformer import aspanformer_indoor, aspanformer_outdoor
+from .efficient_loftr import efficient_loftr
+from .lighterglue import lighterglue
 from .lightglue import (
-    lightglue_superpoint,
     lightglue_aliked,
     lightglue_disk,
     lightglue_sift,
+    lightglue_superpoint,
 )
-
-from .lighterglue import lighterglue
+from .loftr import loftr_indoor_ds, loftr_indoor_ds_new, loftr_outdoor_ds
+from .matchformer import matchformer_largela, matchformer_largesea, matchformer_litela, matchformer_litesea
 from .nn import nn
 from .superglue import superglue_indoor, superglue_outdoor
-from .loftr import loftr_indoor_ds_new, loftr_indoor_ds, loftr_outdoor_ds
-from .aspanformer import aspanformer_indoor, aspanformer_outdoor
-from .efficient_loftr import efficient_loftr
-
-from .matchformer import matchformer_largela, matchformer_largesea, matchformer_litela, matchformer_litesea
 
 __all__ = [
-    "lightglue_superpoint",
+    "aspanformer_indoor",
+    "aspanformer_outdoor",
+    "efficient_loftr",
+    "lighterglue",
     "lightglue_aliked",
     "lightglue_disk",
     "lightglue_sift",
-    "lighterglue",
-    "superglue_indoor",
-    "superglue_outdoor",
-    "nn",
-    "loftr_indoor_ds_new",
+    "lightglue_superpoint",
     "loftr_indoor_ds",
+    "loftr_indoor_ds_new",
     "loftr_outdoor_ds",
-    "efficient_loftr",
-    "aspanformer_indoor",
-    "aspanformer_outdoor",
     "matchformer_largela",
     "matchformer_largesea",
     "matchformer_litela",
     "matchformer_litesea",
+    "nn",
+    "superglue_indoor",
+    "superglue_outdoor",
 ]

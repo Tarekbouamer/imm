@@ -1,5 +1,7 @@
-line-length = 140
-target-version = "py310"
+line-length = 120
+target-version = "py38"
+indent-width = 4
 
 [lint]
 ignore = ["E501", "F841", "E741"]
+select = ["I", "E", "F"]

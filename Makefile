@@ -3,6 +3,7 @@ PIP := $(PYTHON) -m pip
 PROJECT_NAME := imm
 
 SRC_DIR := ./$(PROJECT_NAME)
+TEST_DIR := ./tests
 
 .PHONY: install dev clean lint format check
 
@@ -21,14 +22,16 @@ clean:
 	$(PIP) uninstall -y $(PROJECT_NAME)
 
 lint:
-	ruff check $(SRC_DIR) --fix
 	ruff format $(SRC_DIR)
+	ruff format $(TEST_DIR)
 
 format:
-	ruff format $(SRC_DIR)
+	ruff format $(SRC_DIR) 
+	ruff format $(TEST_DIR) 
 
-check:
-	ruff check $(SRC_DIR)
+sort:
+	ruff check $(SRC_DIR) --fix
+	ruff check $(TEST_DIR) --fix
 
 test:
-	$(PYTHON) -m pytest tests
+	pytest -v tests

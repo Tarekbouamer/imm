@@ -59,7 +59,17 @@ class FeatureModel(ModelBase):
             assert k in data, f"missing required input '{k}'"
 
         data = self.transform_inputs(data)
-        return self.forward(data)
+        preds = self.forward(data)
+
+        # Scale keypoints back to original size
+        if "scale" in data:
+            scale = data["scale"]
+            kpst = preds["kpts"][0]
+
+            kpst = kpst * scale
+            preds["kpts"] = [kpst]
+
+        return preds
 
     def forward(self, x: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         """

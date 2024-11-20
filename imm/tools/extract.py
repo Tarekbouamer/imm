@@ -13,21 +13,20 @@ from imm.settings import img0_path
 from imm.utils.dataset import ImagesFromList
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
-from imm.utils.logger import setup_logger
 from imm.utils.viz2d import KeypointVisualizer
 from imm.utils.writers import FeaturesWriter
 
 
 class Extraction:
-    def __init__(self, name: str, cfg: Optional[Dict[str, Any]] = None, device: str = "cpu", **kwargs: Any):
+    def __init__(self, extractor: str, cfg: Optional[Dict[str, Any]] = None, device: str = "cpu", **kwargs: Any):
         """
-        Initializes the feature extractor model.
+        Initializes the feature extractor .
         """
         self.device = device
-        self.extractor = create_extractor(name=name, cfg=cfg, **kwargs)
+        self.extractor = create_extractor(name=extractor, cfg=cfg, **kwargs)
         self.extractor.to(self.device)
         self.extractor.eval()
-        logger.info(f"Initialized {name} extractor on {device}")
+        logger.info(f"Initialized {extractor} extractor on {device}")
 
     @torch.inference_mode()
     def extract_single_image(self, data: Dict[str, torch.Tensor]) -> Dict[str, Any]:
@@ -39,13 +38,14 @@ class Extraction:
         return to_numpy(preds)
 
     @staticmethod
-    def print_extraction_details(iteration: int, preds: Dict[str, Any]) -> None:
+    def print_extraction_details(iteration: int, name: str, preds: Dict[str, Any]) -> None:
         num_kpts = preds.get("kpts", []).shape[0] if "kpts" in preds else 0
         descriptor_size = preds.get("desc", []).shape if "desc" in preds else (0,)
         size = preds.get("size", (0, 0))
         original_size = preds.get("original_size", (0, 0))
 
         print(f"Iteration {iteration + 1}:")
+        print(f"    Image name: {name}")
         print(f"    Number of kpts: {num_kpts}")
         print(f"    Descriptor size: {descriptor_size}")
         print(f"    Image size: {size}")
@@ -53,7 +53,12 @@ class Extraction:
 
     @torch.inference_mode()
     def extract_dataset(
-        self, dataset: torch.utils.data.Dataset, save_path: Path, batch_size: int = 1, num_workers: int = 4, print_freq: int = 10
+        self,
+        dataset: torch.utils.data.Dataset,
+        save_path: Path,
+        batch_size: int = 1,
+        num_workers: int = 4,
+        print_freq: int = 40,
     ) -> None:
         """
         Extracts features from a dataset and saves them to an HDF5 file.
@@ -77,7 +82,7 @@ class Extraction:
 
             # Print extraction details
             if (idx + 1) % print_freq == 0:
-                self.print_extraction_details(idx, preds)
+                self.print_extraction_details(idx, name, preds)
 
         writer.close()
         total_time = time.time() - start_time
@@ -89,33 +94,45 @@ class Extraction:
 
 
 @click.command()
-@click.option("--model", default="superpoint", help="Extractor name")
+@click.option("--extractor", default="superpoint", help="Extractor name")
 @click.option("--img_path", default=img0_path, help="Path to the image or dataset")
-@click.option("--output_dir", default="output", help="Path to save extracted features")
-@click.option("--max_keypoints", default=2048, help="Maximum number of keypoints")
+@click.option("--max_keypoints", default=-1, help="Maximum number of keypoints")
+@click.option("--det_thd", default=0.0, help="Detector threshold")
+@click.option("--max_img_size", default=640, help="Maximum image size for the extractor")
 @click.option("--batch_size", default=1, help="Batch size for dataset extraction")
 @click.option("--num_workers", default=4, help="Number of workers for DataLoader")
 @click.option("--force_cpu", is_flag=True, help="Force using CPU")
-@click.option("--print_freq", default=10, help="Frequency to print extraction details")
+@click.option("--print_freq", default=100, help="Frequency to print extraction details")
+@click.option("--output_dir", default="output", help="Path to save extracted features")
 @click.help_option("--help", "-h")
 def extract(
-    model: str, img_path: str, output_dir: str, max_keypoints: int, batch_size: int, num_workers: int, force_cpu: bool, print_freq: int
+    extractor: str,
+    img_path: str,
+    max_keypoints: int,
+    det_thd: float,
+    max_img_size: int,
+    batch_size: int,
+    num_workers: int,
+    force_cpu: bool,
+    print_freq: int,
+    output_dir: str,
 ):
-    # Setup logger
-    setup_logger(app_name="imm")
-
+    """Extracts features from an image or a dataset."""
     #  device
     device = detect_device(force_cpu)
 
+    if det_thd > 0:
+        raise NotImplementedError("Detector threshold is not implemented yet.")
+
     # Feature extractor
-    extractor = Extraction(name=model, cfg={"max_keypoints": max_keypoints}, device=device)
+    extractor = Extraction(extractor=extractor, cfg={"max_keypoints": max_keypoints}, device=device)
 
     img_path = Path(img_path)
     if img_path.is_file():
         logger.info(f"Extracting features from {img_path}")
 
         # Load image
-        data = load_image_tensor(str(img_path))
+        data = load_image_tensor(str(img_path), max_img_size)
         image, image_cv = data[0], data[1]
 
         # Extract features from a single image
@@ -134,11 +151,13 @@ def extract(
 
         # Visualize keypoints
         visualizer = KeypointVisualizer()
-        visualizer.visualize_keypoints(image_cv, kpts, scores)
+        visualizer.draw_keypoints(image_cv, kpts, scores)
+
+        return preds
 
     elif img_path.is_dir():
         # Create a dataset from the directory
-        dataset = ImagesFromList(img_path)
+        dataset = ImagesFromList(img_path, max_img_size=max_img_size)
 
         # Set up save path for dataset features
         output_dir = Path(output_dir)
@@ -149,6 +168,8 @@ def extract(
         extractor.extract_dataset(
             dataset=dataset, save_path=save_path, batch_size=batch_size, num_workers=num_workers, print_freq=print_freq
         )
+
+        return save_path
     else:
         logger.error(f"Invalid path: {img_path}. Please provide a valid image or dataset path.")
         return

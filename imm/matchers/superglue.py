@@ -73,7 +73,9 @@ class MultiHeadedAttention(nn.Module):
 
     def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
         batch_dim = query.size(0)
-        query, key, value = [layer(x).view(batch_dim, self.dim, self.num_heads, -1) for layer, x in zip(self.proj, (query, key, value))]
+        query, key, value = [
+            layer(x).view(batch_dim, self.dim, self.num_heads, -1) for layer, x in zip(self.proj, (query, key, value))
+        ]
         x, _ = attention(query, key, value)
         return self.merge(x.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
 
@@ -190,20 +192,26 @@ class SuperGlue(MatcherModel):
         kpts0 = data["kpts0"][0]
         kpts1 = data["kpts1"][0]
 
+        assert (
+            len(kpts0) == len(indices0) == len(mscores0)
+        ), f"Length mismatch kp0={len(kpts0)} idx0={len(indices0)} ms0={len(mscores0)}"
+
         valid = torch.where(indices0 != -1)[0]
 
         mkpts0 = kpts0[valid]
         mkpts1 = kpts1[indices0[valid]]
 
-        scores = mscores0[valid]
+        assert (
+            mkpts0.shape[0] == mkpts1.shape[0]
+        ), f"Number of matches must be equal. Got {mkpts0.shape[0]} and {mkpts1.shape[0]}"
 
         return {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
             "kpts0": kpts0,
             "kpts1": kpts1,
-            "mscores": scores,
-            "matches": indices0,  # TODO: do it in the same way for other matchers
+            "mscores": mscores0,
+            "matches": indices0,
         }
 
     def forward(self, data: dict, **kwargs: Any) -> dict:
@@ -217,10 +225,6 @@ class SuperGlue(MatcherModel):
         assert kpts0.dim() == 3 and kpts1.dim() == 3, "Keypoints must have 3 dimensions"
         assert desc0.dim() == 3 and desc1.dim() == 3, "Descriptors must have 3 dimensions"
         assert scores0.dim() == 2 and scores1.dim() == 2, "Scores must have 2 dimensions"
-
-        # # permute desc0 and desc1 to B d N
-        # desc0 = desc0.permute(0, 2, 1)
-        # desc1 = desc1.permute(0, 2, 1)
 
         # print shape of all inputs
         if kpts0.shape[1] == 0 or kpts1.shape[1] == 0:  # no keypoints
@@ -265,9 +269,7 @@ class SuperGlue(MatcherModel):
         indices1 = torch.where(valid1, indices1, indices1.new_tensor(-1))
 
         # return
-        out = {"indices0": indices0, "mscores0": mscores0}
-
-        return out
+        return {"indices0": indices0, "mscores0": mscores0}
 
 
 default_cfgs = {

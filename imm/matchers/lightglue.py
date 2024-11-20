@@ -1,6 +1,6 @@
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
-import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -101,7 +101,8 @@ class Attention(nn.Module):
         super().__init__()
         if allow_flash and not FLASH_AVAILABLE:
             warnings.warn(
-                "FlashAttention is not available. For optimal speed, " "consider installing torch >= 2.0 or flash-attn.",
+                "FlashAttention is not available. For optimal speed, "
+                "consider installing torch >= 2.0 or flash-attn.",
                 stacklevel=2,
             )
         self.enable_flash = allow_flash and FLASH_AVAILABLE
@@ -415,7 +416,6 @@ class LightGlue(MatcherModel):
             torch.Tensor([self.confidence_threshold(i) for i in range(self.conf.n_layers)]),
         )
         # TODO: work on this part, try to get clean state_dict for strict loading.
-        # TODO: either by correct naming or provied renamed state_dict.
         state_dict = None
         if features is not None:
             fname = f"{conf.weights}_{self.version.replace('.', '-')}.pth"
@@ -451,7 +451,9 @@ class LightGlue(MatcherModel):
 
         torch._inductor.cudagraph_mark_step_begin()
         for i in range(self.conf.n_layers):
-            self.transformers[i].masked_forward = torch.compile(self.transformers[i].masked_forward, mode=mode, fullgraph=True)
+            self.transformers[i].masked_forward = torch.compile(
+                self.transformers[i].masked_forward, mode=mode, fullgraph=True
+            )
 
         self.static_lengths = static_lengths
 
@@ -463,25 +465,27 @@ class LightGlue(MatcherModel):
         return data
 
     def process_matches(self, data: Dict[str, Any], preds: torch.Tensor) -> Dict[str, Any]:
-        #
-        matches = preds["matches"][0]
-        mscores = preds["scores"][0]
+        matches = preds["matches0"][0]
+        mscores = preds["mscores0"][0]
+
+        valid = torch.where(matches != -1)[0]
 
         kpts0 = data["kpts0"][0]
         kpts1 = data["kpts1"][0]
 
-        # valid matches
-        mkpts0 = kpts0[matches[..., 0]]
-        mkpts1 = kpts1[matches[..., 1]]
+        mkpts0 = kpts0[valid]
+        mkpts1 = kpts1[matches[valid]]
 
-        return {
+        out = {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
-            "mscores": mscores,
-            "matches": matches,
             "kpts0": kpts0,
             "kpts1": kpts1,
+            "mscores": mscores,
+            "matches": matches,
         }
+
+        return out
 
     def forward(self, data: dict) -> dict:
         """
@@ -498,9 +502,9 @@ class LightGlue(MatcherModel):
                 image: [B x C x H x W] or image_size: [B x 2]
         Output (dict):
             matches0: [B x M]
-            matching_scores0: [B x M]
+            mscores0: [B x M]
             matches1: [B x N]
-            matching_scores1: [B x N]
+            mscores1: [B x N]
             matches: List[[Si x 2]]
             scores: List[[Si]]
             stop: int
@@ -616,8 +620,8 @@ class LightGlue(MatcherModel):
             return {
                 "matches0": m0,
                 "matches1": m1,
-                "matching_scores0": mscores0,
-                "matching_scores1": mscores1,
+                "mscores0": mscores0,
+                "mscores1": mscores1,
                 "stop": i + 1,
                 "matches": matches,
                 "scores": mscores,
@@ -657,8 +661,8 @@ class LightGlue(MatcherModel):
         return {
             "matches0": m0,
             "matches1": m1,
-            "matching_scores0": mscores0,
-            "matching_scores1": mscores1,
+            "mscores0": mscores0,
+            "mscores1": mscores1,
             "stop": i + 1,
             "matches": matches,
             "scores": mscores,

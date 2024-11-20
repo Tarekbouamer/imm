@@ -1,5 +1,3 @@
-import torch
-
 from imm.extractors._helper import EXTRACTORS_REGISTRY, create_extractor
 from imm.settings import img0_path
 from imm.utils.device import detect_device, to_numpy
@@ -9,13 +7,11 @@ from imm.utils.warnings import suppress_warnings
 
 def extract_keypoints(model, image):
     """Extract keypoints and descriptors (optionally scores) from the image using the specified model."""
-    detector = create_extractor(
-        model, cfg={"max_keypoints": 1000}, pretrained=True)
+    detector = create_extractor(model, cfg={"max_keypoints": 1000}, pretrained=True)
     detector.eval().cuda()
     preds = to_numpy(detector.extract({"image": image}))
 
     kpts = preds.get("kpts", None)
-    # Handle cases where scores might not exist
     scores = preds.get("scores", None)
     descs = preds.get("desc", None)
 
@@ -24,19 +20,17 @@ def extract_keypoints(model, image):
 
 def validate_data(kpts, scores, descs, expected_dim):
     """Validate keypoints and descriptors, scores are optional."""
-    assert kpts is not None and len(
-        kpts) > 0 and kpts[0].shape[1] == 2, "Invalid keypoints"
-    assert descs is not None and len(
-        descs) > 0 and descs[0].shape[0] == expected_dim, "Invalid descriptors"
+    assert kpts is not None and len(kpts) > 0 and kpts[0].shape[1] == 2, "Invalid keypoints"
+    assert descs is not None and len(descs) > 0 and descs[0].shape[0] == expected_dim, "Invalid descriptors"
 
     # If scores are provided, validate them
     if scores is not None:
         assert len(scores) > 0, "Invalid scores"
-        assert len(kpts[0]) == len(
-            scores[0]), "Mismatch between keypoints and scores"
+        assert len(kpts[0]) == len(scores[0]), "Mismatch between keypoints and scores"
 
-    assert len(
-        kpts[0]) == descs[0].shape[1], "Mismatch between keypoints and descriptors"
+    assert len(kpts[0]) == descs[0].shape[1], "Mismatch between keypoints and descriptors"
+
+    print(f"Keypoints: {len(kpts[0])}, Descriptors: {descs[0].shape[1]}")
 
 
 @suppress_warnings()
@@ -46,7 +40,7 @@ def test_all_registered_extractors():
     # Device
     device = detect_device()
 
-    image = load_image_tensor(img0_path)[0].to(device)
+    image = load_image_tensor(img0_path, 640)[0].to(device)
 
     models = EXTRACTORS_REGISTRY.list_models
 
@@ -58,3 +52,8 @@ def test_all_registered_extractors():
             print(f"Model {model} passed")
         except Exception as e:
             print(f"Model {model} failed: {e}")
+            raise
+
+
+if __name__ == "__main__":
+    test_all_registered_extractors()

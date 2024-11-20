@@ -8,7 +8,6 @@ from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
 from imm.tools.match import Matching, load_and_process_image
 from imm.utils.device import detect_device
-from imm.utils.logger import setup_logger
 from imm.utils.warnings import suppress_warnings
 
 
@@ -44,7 +43,6 @@ def estimate(
     force_cpu: bool,
 ):
     """Estimate the transformation between two images."""
-    setup_logger(app_name="imm")
 
     logger.info(f"Starting image estimation process {estimator}-{backend}")
 

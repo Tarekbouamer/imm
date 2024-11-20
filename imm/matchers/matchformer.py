@@ -1,17 +1,16 @@
 from typing import Any, Dict
-import torch
 
-from einops.einops import rearrange
+import torch
 import torchvision.transforms as tfn
+from einops.einops import rearrange
 
 from imm.base.matcher import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY
 from imm.misc import _cfg
 from imm.registry.factory import load_model_weights
+
 from .efficient_loftr import resize_to_divisible
-
-
-from .modules.matchformer import FinePreprocess, CoarseMatching, FineMatching, build_backbone
+from .modules.matchformer import CoarseMatching, FineMatching, FinePreprocess, build_backbone
 
 _config = {
     "backbone_type": "largela",  # litela, largela, litesea, largesea
@@ -102,13 +101,16 @@ class MatchFormer(MatcherModel):
         mkpts0 = preds["kpts0"][0] * data["scale00"]
         mkpts1 = preds["kpts1"][0] * data["scale11"]
 
-        return {
+        out = {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
+            "kpts0": mkpts0,
+            "kpts1": mkpts1,
             "mscores": mscores,
-            "kpts0": torch.empty(0, 2),
-            "kpts1": torch.empty(0, 2),
+            "matches": matches,
         }
+
+        return out
 
     def forward(self, data):
         #
@@ -129,7 +131,14 @@ class MatchFormer(MatcherModel):
         else:
             (feat_c0, feat_f0), (feat_c1, feat_f1) = self.backbone(image0), self.backbone(image1)
 
-        out_data.update({"hw0_c": feat_c0.shape[2:], "hw1_c": feat_c1.shape[2:], "hw0_f": feat_f0.shape[2:], "hw1_f": feat_f1.shape[2:]})
+        out_data.update(
+            {
+                "hw0_c": feat_c0.shape[2:],
+                "hw1_c": feat_c1.shape[2:],
+                "hw0_f": feat_f0.shape[2:],
+                "hw1_f": feat_f1.shape[2:],
+            }
+        )
 
         feat_c0 = rearrange(feat_c0, "n c h w -> n (h w) c")
         feat_c1 = rearrange(feat_c1, "n c h w -> n (h w) c")

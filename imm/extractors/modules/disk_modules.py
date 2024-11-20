@@ -3,7 +3,6 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Bernoulli, Categorical
 
-
 from .unet import thin_setup
 
 DEFAULT_SETUP = {**thin_setup, "bias": True, "padding": True}

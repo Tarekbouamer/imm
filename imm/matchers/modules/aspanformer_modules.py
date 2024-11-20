@@ -62,7 +62,9 @@ class PositionEncodingSine(nn.Module):
             y_position = torch.ones(self.max_shape).cumsum(0).float().unsqueeze(0) * scaling[0]
             x_position = torch.ones(self.max_shape).cumsum(1).float().unsqueeze(0) * scaling[1]
 
-            div_term = torch.exp(torch.arange(0, self.d_model // 2, 2).float() * (-math.log(10000.0) / (self.d_model // 2)))
+            div_term = torch.exp(
+                torch.arange(0, self.d_model // 2, 2).float() * (-math.log(10000.0) / (self.d_model // 2))
+            )
             div_term = div_term[:, None, None]  # [C//4, 1, 1]
             pe[0::4, :, :] = torch.sin(x_position * div_term)
             pe[1::4, :, :] = torch.cos(x_position * div_term)
@@ -552,12 +554,12 @@ class flow_initializer(nn.Module):
             decoupled_feature1[:, self.dim :],
         )
         update_feat0, flow_feature0 = (
-            F.upsample(sub_feat0, scale_factor=ds0, mode="bilinear"),
-            F.upsample(sub_flow_feature0, scale_factor=ds0, mode="bilinear"),
+            F.interpolate(sub_feat0, scale_factor=ds0, mode="bilinear", align_corners=False),
+            F.interpolate(sub_flow_feature0, scale_factor=ds0, mode="bilinear", align_corners=False),
         )
         update_feat1, flow_feature1 = (
-            F.upsample(sub_feat1, scale_factor=ds1, mode="bilinear"),
-            F.upsample(sub_flow_feature1, scale_factor=ds1, mode="bilinear"),
+            F.interpolate(sub_feat1, scale_factor=ds1, mode="bilinear", align_corners=False),
+            F.interpolate(sub_flow_feature1, scale_factor=ds1, mode="bilinear", align_corners=False),
         )
 
         feat0 = feat0 + self.up_merge(torch.cat([feat0, update_feat0], dim=1))
@@ -601,7 +603,9 @@ class LocalFeatureTransformer_Flow(nn.Module):
             config["nsample"],
             update_flow=False,
         )
-        self.layers = nn.ModuleList([copy.deepcopy(encoder_layer) for _ in range(config["layer_num"] - 1)] + [encoder_layer_last])
+        self.layers = nn.ModuleList(
+            [copy.deepcopy(encoder_layer) for _ in range(config["layer_num"] - 1)] + [encoder_layer_last]
+        )
         self._reset_parameters()
 
     def _reset_parameters(self):
@@ -695,7 +699,10 @@ class HierachicalAttention(Module):
         self.fullattention = FullAttention(d_model, nhead)
         self.temp = nn.parameter.Parameter(torch.tensor(1.0), requires_grad=True)
         sample_offset = torch.tensor(
-            [[pos[0] - nsample[1] / 2 + 0.5, pos[1] - nsample[1] / 2 + 0.5] for pos in product(range(nsample[1]), range(nsample[1]))]
+            [
+                [pos[0] - nsample[1] / 2 + 0.5, pos[1] - nsample[1] / 2 + 0.5]
+                for pos in product(range(nsample[1]), range(nsample[1]))
+            ]
         )  # r^2*2
         self.sample_offset = nn.parameter.Parameter(sample_offset, requires_grad=False)
 
@@ -738,7 +745,9 @@ class HierachicalAttention(Module):
             )
             for sub_size in sub_sample0
         ]
-        k_list = [F.avg_pool2d(key.view(bs, -1, h1, w1), kernel_size=sub_size, stride=sub_size) for sub_size in sub_sample1]
+        k_list = [
+            F.avg_pool2d(key.view(bs, -1, h1, w1), kernel_size=sub_size, stride=sub_size) for sub_size in sub_sample1
+        ]
         v_list = [
             F.avg_pool2d(
                 value.view(bs, -1, h1, w1),
@@ -792,7 +801,9 @@ class HierachicalAttention(Module):
             q, k, v = q_list[index], k_list[index], v_list[index]
             mask0, mask1 = mask0_list[index], mask1_list[index]
             s, o = span_list[index - 1], offset_list[index - 1]  # B*h*w(*2)
-            q, k, v, sample_pixel, mask_sample = self.partition_token(q, k, v, o, s, mask0)  # B*Head*D*G*N(G*N=H*W for q)
+            q, k, v, sample_pixel, mask_sample = self.partition_token(
+                q, k, v, o, s, mask0
+            )  # B*Head*D*G*N(G*N=H*W for q)
             message_list.append(
                 self.group_attention(q, k, v, 1, mask_sample).view(
                     bs,
@@ -804,7 +815,7 @@ class HierachicalAttention(Module):
         # fuse
         all_message = torch.cat(
             [
-                F.upsample(
+                F.interpolate(
                     message_list[idx],
                     scale_factor=sub_sample0[idx],
                     mode="nearest",
@@ -1311,7 +1322,11 @@ class CoarseMatching(nn.Module):
         mask = rearrange(mask, "b h0c w0c h1c w1c -> b (h0c w0c) (h1c w1c)", **axes_lengths)
 
         # 2. mutual nearest
-        mask = mask * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0]) * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
+        mask = (
+            mask
+            * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0])
+            * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
+        )
 
         # 3. find all valid coarse matches
         # this only works when at most one `True` in each row

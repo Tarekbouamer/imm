@@ -18,12 +18,12 @@ def cal_error_auc(errors, thresholds):
     recalls = np.arange(N + 1) / N
 
     aucs = []
-    for thresholds in thresholds:
-        last_index = np.searchsorted(errors, thresholds)
+    for thd in thresholds:
+        last_index = np.searchsorted(errors, thd)
         rcs_ = np.append(recalls[:last_index], recalls[last_index - 1])
-        errs_ = np.append(errors[:last_index], thresholds)
+        errs_ = np.append(errors[:last_index], thd)
 
-        aucs.append(np.trapz(rcs_, x=errs_) / thresholds)
+        aucs.append(np.trapz(rcs_, x=errs_) / thd)
 
     return np.array(aucs)
 

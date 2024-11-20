@@ -1,7 +1,8 @@
-from typing import Dict, Type, List, Any, Optional
-from rich.table import Table
-from rich.console import Console
+from typing import Any, Dict, List, Optional, Type
+
 import torch.nn as nn
+from rich.console import Console
+from rich.table import Table
 
 
 class ModelRegistry:
@@ -60,7 +61,9 @@ class ModelRegistry:
         """
         if name not in self._registry:
             available_models = ", ".join(self._registry.keys())
-            raise KeyError(f"No model registered under name '{name}' in {self.name}. " f"Available models are: {available_models}")
+            raise KeyError(
+                f"No model registered under name '{name}' in {self.name}. " f"Available models are: {available_models}"
+            )
         return self._registry[name]
 
     def create_model(

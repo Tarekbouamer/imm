@@ -40,14 +40,13 @@ class MutualNearestNeighbor(MatcherModel):
         mkpts0 = kpts0[valid]
         mkpts1 = kpts1[matches[valid]]
 
-        scores = mscores[valid]
-
         return {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
-            "mscores": scores,
             "kpts0": kpts0,
             "kpts1": kpts1,
+            "mscores": mscores,
+            "matches": matches,
         }
 
     def forward(self, data: Dict[str, torch.Tensor]):

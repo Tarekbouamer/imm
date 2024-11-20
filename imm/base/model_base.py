@@ -1,10 +1,10 @@
 import os
-from typing import Dict, Any, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
+from loguru import logger
 from torch import nn
 from torch.utils.data import DataLoader
-from loguru import logger
 
 try:
     from torchsummary import summary

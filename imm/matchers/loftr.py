@@ -110,9 +110,10 @@ class LoFTR(MatcherModel):
         return {
             "mkpts0": mkpts0,
             "mkpts1": mkpts1,
+            "kpts0": kpts0,
+            "kpts1": kpts1,
             "mscores": mscores,
-            "kpts0": torch.empty(0, 2),
-            "kpts1": torch.empty(0, 2),
+            "matches": matches,
         }
 
     def forward(self, data: dict) -> dict:

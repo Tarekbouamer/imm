@@ -41,14 +41,16 @@ class Viz2D:
             image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
         return image
 
-    def draw_image(self, image: Union[np.ndarray, str, Path], title: str = "Image"):
+    def draw_image(self, image: Union[np.ndarray, str, Path], title: str = "Image", show_image: bool = True):
         image = self.ensure_rgb(image)
-        self.results = image  # Store the drawn result
-        plt.figure(figsize=(10, 10))
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        plt.title(title)
-        plt.axis("off")
-        plt.show()
+        self.results = image
+
+        if show_image:
+            plt.figure(figsize=(10, 10))
+            plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            plt.title(title)
+            plt.axis("off")
+            plt.show()
 
     def save(self, file_path: str):
         if self.results is not None:
@@ -84,13 +86,14 @@ class KeypointVisualizer(Viz2D):
     def __init__(self):
         super().__init__()
 
-    def visualize_keypoints(
+    def draw_keypoints(
         self,
         image: Union[np.ndarray, str, Path],
         keypoints: np.ndarray,
         scores: Optional[np.ndarray] = None,
         title: str = "kpts",
         default_color: Tuple[int, int, int] = (0, 0, 255),
+        show_image: bool = True,
     ):
         image_with_keypoints = self.ensure_rgb(image).copy()
 
@@ -119,14 +122,14 @@ class KeypointVisualizer(Viz2D):
 
         # title with number of keypoints
         title = f"{title} ({len(keypoints)} keypoints)"
-        self.draw_image(image_with_keypoints, title)
+        self.draw_image(image_with_keypoints, title, show_image=show_image)
 
 
 class MatchVisualizer(Viz2D):
     def __init__(self):
         super().__init__()
 
-    def visualize_matches(
+    def draw_matches(
         self,
         image1: Union[np.ndarray, str, Path],
         image2: Union[np.ndarray, str, Path],
@@ -135,11 +138,12 @@ class MatchVisualizer(Viz2D):
         mkpts0: np.ndarray,
         mkpts1: np.ndarray,
         matches: Optional[np.ndarray] = None,
-        scores: Optional[np.ndarray] = None,
+        mscores: Optional[np.ndarray] = None,
         color_inliers: Optional[Tuple[int, int, int]] = (0, 0, 255),
         color_outliers: Optional[Tuple[int, int, int]] = (255, 0, 0),
         color_lines: Optional[Tuple[int, int, int]] = (0, 255, 0),
         title="Matches",
+        show_image: bool = True,
     ):
         image1_rgb = self.ensure_rgb(image1)
         image2_rgb = self.ensure_rgb(image2)
@@ -177,8 +181,10 @@ class MatchVisualizer(Viz2D):
                 -1,
             )
 
-        if scores is not None:
-            for i, score in enumerate(scores):
+        if mscores is not None:
+            valid = np.where(matches != -1)
+            mscores = mscores[valid]
+            for i, score in enumerate(mscores):
                 kp0 = mkpts0[i]
                 kp1_offset = (
                     mkpts1[i][0] + image1_rgb.shape[1] + 10,
@@ -195,6 +201,6 @@ class MatchVisualizer(Viz2D):
         # title with number of keypoints of image 0 and image 1 and matches
         title = f"{title} (kpts0: {len(kpts0)}, kpts1: {len(kpts1)}, matches: {len(mkpts0)})"
 
-        self.draw_image(composite_image, title)
+        self.draw_image(composite_image, title, show_image=show_image)
 
         return composite_image

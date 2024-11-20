@@ -82,11 +82,15 @@ class SuperPoint(FeatureModel):
         scores = [s[tuple(k.t())] for s, k in zip(scores, keypoints)]
 
         # Discard keypoints near the image borders
-        keypoints, scores = list(zip(*[remove_borders(k, s, self.cfg["remove_borders"], h * 8, w * 8) for k, s in zip(keypoints, scores)]))
+        keypoints, scores = list(
+            zip(*[remove_borders(k, s, self.cfg["remove_borders"], h * 8, w * 8) for k, s in zip(keypoints, scores)])
+        )
 
         # Keep the k keypoints with highest score
         if self.cfg["max_keypoints"] >= 0:
-            keypoints, scores = list(zip(*[top_k_keypoints(k, s, self.cfg["max_keypoints"]) for k, s in zip(keypoints, scores)]))
+            keypoints, scores = list(
+                zip(*[top_k_keypoints(k, s, self.cfg["max_keypoints"]) for k, s in zip(keypoints, scores)])
+            )
 
         # Convert (h, w) to (x, y)
         keypoints = [torch.flip(k, [1]).float() for k in keypoints]

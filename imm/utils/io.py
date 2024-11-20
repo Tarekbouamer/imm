@@ -14,30 +14,33 @@ INTER_MODES: dict = {
 }
 
 
-def find_images(image_path: Path, output_file: Optional[Path] = None) -> List[Path]:
-    """Find images in the specified path"""
+def find_images(root: Path, output_file: Optional[Path] = None) -> List[Path]:
+    """Find images in the specified path and subdirectories"""
 
     # Search for image files in the specified path
     image_files = [
-        file for ext in {"jpg", "jpeg", "png"} for file in list(image_path.rglob(f"*.{ext}")) + list(image_path.rglob(f"*.{ext.upper()}"))
+        file
+        for ext in {"jpg", "jpeg", "png"}
+        for file in list(root.rglob(f"*.{ext}")) + list(root.rglob(f"*.{ext.upper()}"))
     ]
 
     #
     if not image_files:
-        logger.warning(f"No images found in {image_path}")
+        logger.warning(f"No images found in {root}")
         return []
 
-    # Write the list of images to a file
-    if output_file:
-        try:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            with output_file.open("w") as f:
-                for image_file in image_files:
-                    relative_path = image_file.relative_to(image_path)
-                    f.write(f"{relative_path}\n")
-            logger.info(f"Image list written to {output_file}")
-        except Exception as e:
-            logger.error(f"Error writing to {output_file}: {e}")
+    if output_file is None:
+        output_file = root / "image_list.txt"
+
+    try:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with output_file.open("w") as f:
+            for image_file in image_files:
+                relative_path = image_file.relative_to(root)
+                f.write(f"{relative_path}\n")
+        logger.info(f"Image list written to {output_file}")
+    except Exception as e:
+        logger.error(f"Error writing to {output_file}: {e}")
 
     return image_files
 
@@ -107,7 +110,9 @@ def read_image(path, gray=False):
     return image, size
 
 
-def load_image(image_path, resize=None, resize_fn="max", gray=False, df=1, padding=False, interp=cv2.INTER_AREA):  # read image
+def load_image(
+    image_path, resize=None, resize_fn="max", gray=False, df=1, padding=False, interp=cv2.INTER_AREA
+):  # read image
     # read image
     cv_img, original_size = read_image(image_path, gray)
     mask = None
@@ -189,7 +194,8 @@ def load_image_tensor(
 
     # -> tensor
     tensor_img, mask = toImageTensor(cv_img, padding=padding)
-    scale = torch.from_numpy(scale).float()
+    scale = torch.tensor(scale, dtype=torch.float32)
+    original_size = torch.tensor(original_size, dtype=torch.float32)
 
     # batched
     if batched:

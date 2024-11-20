@@ -123,7 +123,6 @@ class DISK(FeatureModel):
             "kpts": [kpts],
             "desc": [desc],
             "scores": [scores],
-            "size": data["size"],
         }
 
 

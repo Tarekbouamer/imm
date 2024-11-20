@@ -17,10 +17,9 @@ from imm.settings import img1_path as default_img1_path
 from imm.utils.dataset import FeaturesPairsDataset, ImagePairsDataset
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
-from imm.utils.logger import setup_logger
 from imm.utils.viz2d import MatchVisualizer
 from imm.utils.warnings import suppress_warnings
-from imm.utils.writers import MatchesWriter
+from imm.utils.writers import AsycMatchesWriter, MatchesWriter
 
 
 def path2key(name: str) -> str:
@@ -34,42 +33,39 @@ def pairs2key(name0: str, name1: str) -> str:
     return separator.join((path2key(name0), path2key(name1)))
 
 
-def load_and_process_image(image_path: str, max_size: Optional[int], device: torch.device) -> Tuple[torch.Tensor, np.ndarray]:
+def load_and_process_image(
+    image_path: str, max_img_size: Optional[int], device: torch.device
+) -> Tuple[torch.Tensor, np.ndarray]:
     """Load and process an image."""
     logger.info(f"Loading image: {image_path}")
-    data = load_image_tensor(image_path, resize=max_size)
+    data = load_image_tensor(image_path, resize=max_img_size)
     return data[0].to(device), data[1]
-
-
-# TODO: add match pair for matching two images
-# TODO: add match sequence for matching a sequence of pairs directly on image level
-# TODO: add match features for matching a sequence of pairs on feature level
 
 
 class Matching:
     def __init__(
         self,
-        matcher_name: str,
-        cfg: Optional[Dict[str, Any]] = None,
-        device: Optional[str] = None,
+        matcher_name: str = "superglue_outdoor",
         extractor_name: str = "superpoint",
+        max_keypoints: int = -1,
+        device: Optional[str] = None,
         **kwargs: Any,
     ):
         """
         Initializes the Matching class and the matcher model. Sets up the extractor if needed.
         """
         self.device = device if device else detect_device()
-        self.matcher = create_matcher(name=matcher_name, cfg=cfg, **kwargs)
+        self.matcher = create_matcher(name=matcher_name, cfg={}, **kwargs)
         self.matcher.to(self.device)
         self.matcher.eval()
         logger.info(f"Initialized {matcher_name} matcher on {self.device}")
 
         self.extractor = None
         if "image0" not in self.matcher.required_inputs:
-            self.set_extractor(extractor_name)
+            self.set_extractor(extractor_name, max_keypoints)
 
-    def set_extractor(self, extractor_name: str):
-        self.extractor = create_extractor(extractor_name)
+    def set_extractor(self, extractor_name: str, max_keypoints: int) -> None:
+        self.extractor = create_extractor(extractor_name, cfg={"max_keypoints": max_keypoints})
         self.extractor.eval().to(self.device)
         logger.info(f"Initialized {extractor_name} extractor on {self.device}")
 
@@ -88,48 +84,56 @@ class Matching:
         preds = self.matcher.match(data)
         return to_numpy(preds)
 
-    def match_images(self, image0: torch.Tensor, image1: torch.Tensor) -> Dict[str, Any]:
+    def filter_matches(self, preds: Dict[str, np.ndarray], match_thd: float) -> Dict[str, np.ndarray]:
+        if match_thd <= 0:
+            return preds
+        else:
+            raise NotImplementedError("Filtering matches based on threshold is not implemented yet")
+            # TODO: Implement filtering based on threshold
+
+    @torch.inference_mode()
+    def match_images(self, image0: torch.Tensor, image1: torch.Tensor, match_thd: float = 0.0) -> Dict[str, np.ndarray]:
         if "image0" in self.matcher.required_inputs:
-            match_data = {"image0": image0, "image1": image1}
-            return self.match_features(match_data)
+            data = {"image0": image0, "image1": image1}
+            preds = self.match_features(data)
+            return self.filter_matches(preds, match_thd)
         else:
             features0 = self.extract_features(image0, "0")
             features1 = self.extract_features(image1, "1")
             logger.info(f"Matching img0: {len(features0['kpts0'][0])}, img1: {len(features1['kpts1'][0])}")
-            match_data = {**features0, **features1}
-            return self.match_features(match_data)
+            data = {**features0, **features1}
+            preds = self.match_features(data)
+            return self.filter_matches(preds, match_thd)
 
-    def compute_match_statistics(self, matches: Dict[str, np.ndarray]) -> Dict[str, float]:
+    def compute_match_statistics(
+        self, idx: int, matches: Dict[str, np.ndarray], name0: str = "", name1: str = ""
+    ) -> Dict[str, Any]:
         """Computes statistics about the matches."""
+
         num_matches = len(matches.get("mkpts0", []))
-        if num_matches == 0:
-            logger.warning("No matches found")
-            return {
-                "num_matches": num_matches,
-                "avg_score": 0.0,
-                "max_score": 0.0,
-                "min_score": 0.0,
-            }
+        kpts0 = len(matches.get("kpts0", []))
+        kpts1 = len(matches.get("kpts1", []))
 
-        avg_score = np.mean(matches["mscores"])
-        max_score = np.max(matches["mscores"])
-        min_score = np.min(matches["mscores"])
-
-        print(f"Number of matches: {num_matches}")
-        print(f"Average score: {avg_score:.3f}")
-        print(f"Max score: {max_score:.3f}")
-        print(f"Min score: {min_score:.3f}")
+        print(f"Iteration {idx + 1}:")
+        print(f"    Image pair: {name0} - {name1}")
+        print(f"    Number of matches: {num_matches}")
+        print(f"    keypoints: {kpts0} - {kpts1}")
 
         return {
             "num_matches": num_matches,
-            "avg_score": avg_score,
-            "max_score": max_score,
-            "min_score": min_score,
+            "num_kpts0": kpts0,
+            "num_kpts1": kpts1,
         }
 
     @torch.inference_mode()
     def match_sequence_images(
-        self, dataset: ImagePairsDataset, save_path: Path, batch_size: int = 1, num_workers: int = 4, print_freq: int = 10
+        self,
+        dataset: ImagePairsDataset,
+        save_path: Path,
+        batch_size: int = 1,
+        num_workers: int = 4,
+        print_freq: int = 100,
+        match_thd: float = 0.0,
     ) -> None:
         """Processes a dataset of image pairs and saves matching results."""
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
@@ -142,7 +146,7 @@ class Matching:
             image0, image1 = data["image0"][0], data["image1"][0]
 
             # Match images directly
-            preds = self.match_images(image0, image1)
+            preds = self.match_images(image0, image1, match_thd=match_thd)
             pair_key = pairs2key(name0, name1)
 
             # Write matches and stats to file
@@ -150,7 +154,7 @@ class Matching:
 
             # Compute statistics
             if (idx + 1) % print_freq == 0:
-                stats = self.compute_match_statistics(preds)
+                stats = self.compute_match_statistics(idx, preds, name0, name1)
 
         writer.close()
         total_time = time.time() - start_time
@@ -159,14 +163,23 @@ class Matching:
 
     @torch.inference_mode()
     def match_sequence_features(
-        self, dataset: FeaturesPairsDataset, save_path: Path, batch_size: int = 1, num_workers: int = 4, print_freq: int = 10
+        self,
+        dataset: FeaturesPairsDataset,
+        save_path: Path,
+        batch_size: int = 1,
+        num_workers: int = 16,
+        print_freq: int = 100,
+        keys: Optional[List[str]] = None,
+        match_thd: float = 0.0,
     ) -> None:
         """Processes a dataset of pre-extracted feature pairs and saves matching results."""
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
-        writer = MatchesWriter(save_path)
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False, pin_memory=True)
+        writer = AsycMatchesWriter(save_path, num_workers=num_workers)
+
+        if match_thd > 0:
+            raise NotImplementedError("Filtering matches based on threshold is not implemented yet")
 
         start_time = time.time()
-
         for idx, data in enumerate(tqdm(dataloader, desc="Matching features".rjust(15), colour="green")):
             name0, name1 = data["name0"][0], data["name1"][0]
 
@@ -174,12 +187,15 @@ class Matching:
             preds = self.match_features(data)
             pair_key = pairs2key(name0, name1)
 
+            # Filter keys
+            wpreds = {k: preds[k] for k in keys} if keys else preds
+
             # Write matches and stats to file
-            writer.write_matches(pair_key, preds)
+            writer.write_matches(pair_key, wpreds)
 
             # Compute statistics
             if (idx + 1) % print_freq == 0:
-                stats = self.compute_match_statistics(preds)
+                stats = self.compute_match_statistics(idx, preds, name0, name1)
 
         writer.close()
         total_time = time.time() - start_time
@@ -195,32 +211,45 @@ class Matching:
 @click.argument("img1_path", type=click.Path(exists=True), default=default_img1_path)
 @click.option("--matcher", default="superglue_outdoor", help="Matcher name")
 @click.option("--extractor", default="superpoint", help="Extractor name")
-@click.option("--max_size", default=None, type=int, help="Max image size")
-@click.option("--output_dir", default="output", help="Output directory for logs and visualization")
-@click.option("--threshold", default=0.0, help="Matching score threshold")
-@click.option("--visualize/--no-visualize", default=True, help="Enable or disable visualization")
+@click.option("--max_keypoints", default=-1, help="Maximum number of keypoints", type=int)
+@click.option("--max_img_size", default=None, type=int, help="Max image size")
+@click.option("--match_thd", default=0.0, help="Matching score threshold")
+@click.option("--visualize", is_flag=True, help="Enable visualization")
 @click.option("--force_cpu", is_flag=False, help="Force the use of CPU instead of GPU")
-@click.help_option("--help", "-h")
+@click.option("--save_path", default=None, help="Output directory ")
 @suppress_warnings()
 def match_images(
     img0_path: str,
     img1_path: str,
     matcher: str,
     extractor: str,
-    max_size: Optional[int],
-    output_dir: str,
-    threshold: float,
+    max_keypoints: int,
+    max_img_size: int,
+    match_thd: float,
     visualize: bool,
     force_cpu: bool,
+    save_path: str,
 ) -> None:
-    """Match features between two images."""
+    """Match a pair of images using a given matcher and extractor.
 
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    setup_logger(app_name="imm")
+    Args:
+        img0_path (str): Path to the first image.
+        img1_path (str): Path to the second image.
+        matcher (str): Name of the matcher.
+        extractor (str): Name of the extractor.
+        max_keypoints (int): Maximum number of keypoints.
+        max_img_size (int): Maximum image size.
+        match_thd (float): Matching score threshold.
+        visualize (bool): Enable or disable visualization.
+        force_cpu (bool): Force the use of CPU instead of GPU.
+        save_path (str): Output directory.
+    """
 
     logger.info("Starting image matching process")
-    logger.info(f"Matcher: {matcher}, Extractor: {extractor}, Max size: {max_size}, Threshold: {threshold}")
+    logger.info(
+        f"Matcher: {matcher}, Extractor: {extractor}, Max keypoints: {max_keypoints}",
+        f"Threshold: {match_thd}, Max size: {max_img_size}",
+    )
 
     # Determine device
     device = detect_device(force_cpu)
@@ -230,32 +259,25 @@ def match_images(
     img1_path = Path(img1_path)
 
     # Load and process images
-    image0, image0_cv = load_and_process_image(img0_path, max_size, device)
-    image1, image1_cv = load_and_process_image(img1_path, max_size, device)
+    image0, image0_cv = load_and_process_image(img0_path, max_img_size, device)
+    image1, image1_cv = load_and_process_image(img1_path, max_img_size, device)
 
     # Match images
-    matcher_model = Matching(matcher_name=matcher, device=device, extractor_name=extractor)
+    matcher = Matching(matcher_name=matcher, extractor_name=extractor, max_keypoints=max_keypoints, device=device)
 
-    matches = matcher_model.match_images(image0, image1)
-
-    # Statistics
-    stats = matcher_model.compute_match_statistics(matches)
-    logger.info(f"Match statistics: {stats}")
+    matches = matcher.match_images(image0, image1)
 
     # Visualize matches
-    if visualize:
-        logger.info("Visualizing matches")
-        visualizer = MatchVisualizer()
-        visualizer.visualize_matches(
-            image0_cv,
-            image1_cv,
-            kpts0=matches["kpts0"],
-            kpts1=matches["kpts1"],
-            mkpts0=matches["mkpts0"],
-            mkpts1=matches["mkpts1"],
-            scores=matches["mscores"],
-        )
-        output_file = output_path / f"matches_{img0_path.stem}_{img1_path.stem}.png"
+    visualizer = MatchVisualizer()
+    visualizer.draw_matches(image0_cv, image1_cv, **matches, title="Matches", show_image=visualize)
+
+    if save_path is not None:
+        save_path = Path(save_path)
+        if save_path.is_dir():
+            output_file = save_path / f"matches_{img0_path.stem}_{img1_path.stem}.png"
+        else:
+            output_file = save_path
+
         visualizer.save(str(output_file))
         logger.info(f"Visualization saved to {output_file}")
 

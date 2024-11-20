@@ -1,3 +1,5 @@
+from typing import Dict, List
+
 import torch
 import torch.nn.functional as functional
 
@@ -36,14 +38,12 @@ class R2d2Net(FeatureModel):
 
         image = tfn_image_net(data["image"])
 
-        return image
+        return {"image": image}
 
-    def forward(self, image):
-        # # transform inputs
-        # image = self.transform_inputs(data)
-
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, List[torch.Tensor]]:
+        """forward pass"""
         # extract features
-        features = self.net.extract_features(image)
+        features = self.net.extract_features(data["image"])
 
         # ureliability &&  urepeatability
         ureliability = self.net.clf(features**2)

@@ -2,15 +2,14 @@ import os
 import re
 import sys
 from collections import defaultdict
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
+import gdown
 import torch
 import torch.nn as nn
 from loguru import logger
 from torch.hub import load_state_dict_from_url
-import gdown
-
-from typing import Union, Any
-from pathlib import Path
 
 # Globally accessible model registries and configurations
 _module_to_models = defaultdict(set)

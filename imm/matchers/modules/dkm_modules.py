@@ -137,7 +137,9 @@ def local_correlation(feature0, feature1, local_radius, padding_mode="zeros", fl
     )
 
     local_window = (
-        torch.stack((local_window[1], local_window[0]), dim=-1)[None].expand(b, 2 * r + 1, 2 * r + 1, 2).reshape(b, (2 * r + 1) ** 2, 2)
+        torch.stack((local_window[1], local_window[0]), dim=-1)[None]
+        .expand(b, 2 * r + 1, 2 * r + 1, 2)
+        .reshape(b, (2 * r + 1) ** 2, 2)
     )
     coords = (coords[:, :, :, None] + local_window[:, None, None]).reshape(b, h, w * (2 * r + 1) ** 2, 2)
     window_feature = F.grid_sample(feature1, coords, padding_mode=padding_mode, align_corners=False)[..., None].reshape(

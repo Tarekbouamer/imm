@@ -15,7 +15,7 @@ def relative_path(path, root):
 class ImagesFromList(Dataset):
     """Dataset for loading images from a directory."""
 
-    def __init__(self, root: str, **kwargs):
+    def __init__(self, root: str, max_img_size: int = -1):
         # root
         self.root = root
 
@@ -25,7 +25,12 @@ class ImagesFromList(Dataset):
         # image names
         self.names = [relative_path(img_path, root) for img_path in self.images_paths]
 
-        logger.info(f"found {len(self.images_paths)} images in {root}")
+        #
+        self.max_img_size = max_img_size
+
+        logger.info("ImagesFromList:")
+        logger.info(f"      Images: {len(self.images_paths)} in {root}")
+        logger.info(f"      Max image size: {max_img_size}")
 
     def __len__(self):
         return len(self.images_paths)
@@ -40,34 +45,35 @@ class ImagesFromList(Dataset):
         img_name = self.names[item]
 
         # load image
-        data = load_image_tensor(img_path)
+        data = load_image_tensor(img_path, resize=self.max_img_size)
         image = data[0]
         image_cv = data[1]
-
-        # size WxH
-        original_size = image_cv.shape[:2][::-1]
-        original_size = torch.tensor(original_size).float()
+        scale = data[3]
+        original_size = data[4]
 
         # dict
         out["image"] = image
         out["name"] = img_name
         out["original_size"] = original_size
+        out["scale"] = scale
 
         return out
 
     def __repr__(self):
-        return f"ImagesFromList(root={self.root}, num_images={len(self.images_paths)})"
+        return (
+            f"ImagesFromList(root={self.root}, num_images={len(self.images_paths)}, max_img_size={self.max_img_size})"
+        )
 
 
 def read_key_from_h5py(name, _path):
     """Reads a specific key from an HDF5 file."""
     data = {}
-    with h5py.File(str(_path), "r") as f:
+    with h5py.File(str(_path), "r", libver="latest") as f:
         if name in f:
             g = f[name]
         else:
             logger.error(f"{name} not found in {_path}")
-            return data  
+            return data
 
         for k, v in g.items():
             data[k] = torch.from_numpy(v.__array__()).float()

@@ -126,7 +126,12 @@ class CoarseMatching(nn.Module):
                 'mkpts1_c' (torch.Tensor): [M, 2],
                 'mconf' (torch.Tensor): [M]}
         """
-        axes_lengths = {"h0c": data["hw0_c"][0], "w0c": data["hw0_c"][1], "h1c": data["hw1_c"][0], "w1c": data["hw1_c"][1]}
+        axes_lengths = {
+            "h0c": data["hw0_c"][0],
+            "w0c": data["hw0_c"][1],
+            "h1c": data["hw1_c"][0],
+            "w1c": data["hw1_c"][1],
+        }
         _device = conf_matrix.device
         # 1. confidence thresholding
         mask = conf_matrix > self.thr
@@ -138,7 +143,11 @@ class CoarseMatching(nn.Module):
         mask = rearrange(mask, "b h0c w0c h1c w1c -> b (h0c w0c) (h1c w1c)", **axes_lengths)
 
         # 2. mutual nearest
-        mask = mask * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0]) * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
+        mask = (
+            mask
+            * (conf_matrix == conf_matrix.max(dim=2, keepdim=True)[0])
+            * (conf_matrix == conf_matrix.max(dim=1, keepdim=True)[0])
+        )
 
         # 3. find all valid coarse matches
         # this only works when at most one `True` in each row
@@ -165,18 +174,27 @@ class CoarseMatching(nn.Module):
             if num_matches_pred <= num_matches_train - self.train_pad_num_gt_min:
                 pred_indices = torch.arange(num_matches_pred, device=_device)
             else:
-                pred_indices = torch.randint(num_matches_pred, (num_matches_train - self.train_pad_num_gt_min,), device=_device)
+                pred_indices = torch.randint(
+                    num_matches_pred, (num_matches_train - self.train_pad_num_gt_min,), device=_device
+                )
 
             # gt_pad_indices is to select from gt padding. e.g. max(3787-4800, 200)
             gt_pad_indices = torch.randint(
-                len(data["spv_b_ids"]), (max(num_matches_train - num_matches_pred, self.train_pad_num_gt_min),), device=_device
+                len(data["spv_b_ids"]),
+                (max(num_matches_train - num_matches_pred, self.train_pad_num_gt_min),),
+                device=_device,
             )
             # set conf of gt paddings to all zero
             mconf_gt = torch.zeros(len(data["spv_b_ids"]), device=_device)
 
             b_ids, i_ids, j_ids, mconf = map(
                 lambda x, y: torch.cat([x[pred_indices], y[gt_pad_indices]], dim=0),
-                *zip([b_ids, data["spv_b_ids"]], [i_ids, data["spv_i_ids"]], [j_ids, data["spv_j_ids"]], [mconf, mconf_gt]),
+                *zip(
+                    [b_ids, data["spv_b_ids"]],
+                    [i_ids, data["spv_i_ids"]],
+                    [j_ids, data["spv_j_ids"]],
+                    [mconf, mconf_gt],
+                ),
             )
 
         # These matches select patches that feed into fine-level network

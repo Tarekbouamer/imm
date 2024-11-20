@@ -1,11 +1,10 @@
-from .match_LA_lite import Matchformer_LA_lite
-from .match_LA_large import Matchformer_LA_large
-from .match_SEA_lite import Matchformer_SEA_lite
-from .match_SEA_large import Matchformer_SEA_large
-
 from .coarse_matching import CoarseMatching
 from .fine_matching import FineMatching
 from .fine_preprocess import FinePreprocess
+from .match_LA_large import Matchformer_LA_large
+from .match_LA_lite import Matchformer_LA_lite
+from .match_SEA_large import Matchformer_SEA_large
+from .match_SEA_lite import Matchformer_SEA_lite
 
 
 def build_backbone(config):

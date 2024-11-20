@@ -1,5 +1,7 @@
+from typing import Any, Dict, Optional
+
 from loguru import logger
-from typing import Optional, Dict, Any
+
 from imm.registry.register import ModelRegistry
 
 EXTRACTORS_REGISTRY = ModelRegistry("extractors", location=__file__)
@@ -32,7 +34,9 @@ def create_extractor(
     try:
         if not EXTRACTORS_REGISTRY.is_model(name):
             available_models = EXTRACTORS_REGISTRY.list_models
-            raise ValueError(f"Extractor '{name}' is not available. " f"Available models are: {', '.join(available_models)}")
+            raise ValueError(
+                f"Extractor '{name}' is not available. " f"Available models are: {', '.join(available_models)}"
+            )
         model = EXTRACTORS_REGISTRY.create_model(name, cfg=cfg, pretrained=pretrained, **kwargs)
         logger.info(f"Successfully created extractor: {name}")
         return model

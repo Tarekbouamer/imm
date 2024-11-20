@@ -1,12 +1,10 @@
+from enum import Enum
 from typing import Any, Callable, Dict, List, Union
 
-from omegaconf import OmegaConf
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from .model_base import ModelBase
-
-from enum import Enum
 
 
 # enum matcher to sparse and dense matchers

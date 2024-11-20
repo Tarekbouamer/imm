@@ -1,6 +1,7 @@
 import sys
-from loguru import logger
 from pathlib import Path
+
+from loguru import logger
 
 
 def setup_logger(
@@ -30,9 +31,7 @@ def setup_logger(
     log_file = log_path / f"{app_name}_{{time}}.log"
 
     # Define log message formats
-    console_format = (
-        f"<green>{{time:YYYY-MM-DD HH:mm:ss}}</green> | <level>{{level: <8}}</level> | <cyan>{app_name}</cyan> | <level>{{message}}</level>"
-    )
+    console_format = f"<green>{{time:YYYY-MM-DD HH:mm:ss}}</green> | <level>{{level: <8}}</level> | <cyan>{app_name}</cyan> | <level>{{message}}</level>"
     file_format = f"{{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {app_name} | {{message}}"
 
     # Configure loggers

@@ -88,7 +88,7 @@ default_cfgs = {
         max_keypoints=-1,
         descriptor_dim=512,
     ),
-    "d2_tf_no_phototourism": _cfg(
+    "d2net_tf_no_phototourism": _cfg(
         url="https://dusmanu.com/files/d2-net/d2_tf_no_phototourism.pth",
         multiscale=False,
         max_keypoints=-1,
@@ -118,8 +118,8 @@ def d2net_tf(cfg=None, **kwargs):
 
 
 @EXTRACTORS_REGISTRY.register(
-    name="d2_tf_no_phototourism",
-    default_cfg=default_cfgs["d2_tf_no_phototourism"],
+    name="d2net_tf_no_phototourism",
+    default_cfg=default_cfgs["d2net_tf_no_phototourism"],
 )
-def d2_tf_no_phototourism(cfg=None, **kwargs):
-    return _make_model(name="d2_tf_no_phototourism", cfg=cfg, **kwargs)
+def d2net_tf_no_phototourism(cfg=None, **kwargs):
+    return _make_model(name="d2net_tf_no_phototourism", cfg=cfg, **kwargs)

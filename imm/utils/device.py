@@ -1,6 +1,6 @@
-from loguru import logger
-import torch
 import numpy as np
+import torch
+from loguru import logger
 
 
 def detect_device(force_cpu: bool = False) -> str:
@@ -83,3 +83,39 @@ def to_cuda(data):
         return data.cuda()
     else:
         return data
+
+
+def to_half(data):
+    """Convert data to half precision recursively, equivalent to float16."""
+    if isinstance(data, dict):
+        return {k: to_half(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [to_half(v) for v in data]
+    elif isinstance(data, tuple):
+        return tuple(to_half(v) for v in data)
+    elif isinstance(data, set):
+        return {to_half(v) for v in data}
+    elif isinstance(data, torch.Tensor):
+        return data.half()
+    elif isinstance(data, np.ndarray):
+        return data.astype(np.float16)
+    else:
+        raise TypeError(f"Unsupported data type: {type(data)}")
+
+
+def to_short(data):
+    """Convert data to short precision recursively, equivalent to int16."""
+    if isinstance(data, dict):
+        return {k: to_short(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [to_short(v) for v in data]
+    elif isinstance(data, tuple):
+        return tuple(to_short(v) for v in data)
+    elif isinstance(data, set):
+        return {to_short(v) for v in data}
+    elif isinstance(data, torch.Tensor):
+        return data.short()
+    elif isinstance(data, np.ndarray):
+        return data.astype(np.int16)
+    else:
+        raise TypeError(f"Unsupported data type: {type(data)}")
