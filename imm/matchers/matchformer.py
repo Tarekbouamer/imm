@@ -23,7 +23,7 @@ _config = {
         "d_ffn": 256,
     },
     "match_coarse": {
-        "thr": 0.2,
+        "match_threshold": 0.2,
         "border_rm": 0,
         "match_type": "dual_softmax",
         "dsmax_temperature": 0.1,

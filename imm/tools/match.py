@@ -49,13 +49,14 @@ class Matching:
         extractor_name: str = "superpoint",
         max_keypoints: int = -1,
         device: Optional[str] = None,
+        match_thd: float = 0.0,
         **kwargs: Any,
     ):
         """
         Initializes the Matching class and the matcher model. Sets up the extractor if needed.
         """
         self.device = device if device else detect_device()
-        self.matcher = create_matcher(name=matcher_name, cfg={}, **kwargs)
+        self.matcher = create_matcher(name=matcher_name, cfg={"match_threshold": match_thd}, **kwargs)
         self.matcher.to(self.device)
         self.matcher.eval()
         logger.info(f"Initialized {matcher_name} matcher on {self.device}")
@@ -88,8 +89,24 @@ class Matching:
         if match_thd <= 0:
             return preds
         else:
-            raise NotImplementedError("Filtering matches based on threshold is not implemented yet")
-            # TODO: Implement filtering based on threshold
+            # Indices
+            matches = preds["matches"]
+            mscores = preds["mscores"]
+
+            # Filter matches based on -1 and matching threshold
+            valid0 = np.where(matches != -1)
+            valid1 = np.where(mscores > match_thd)
+            valid = np.intersect1d(valid0, valid1)
+
+            non_valid = np.setdiff1d(np.arange(len(matches)), valid)
+
+            # Update non-valid matches with -1
+            preds["matches"][non_valid] = -1
+
+            preds["mkpts0"] = preds["kpts0"][valid]
+            preds["mkpts1"] = preds["kpts1"][matches[valid]]
+
+            return preds
 
     @torch.inference_mode()
     def match_images(self, image0: torch.Tensor, image1: torch.Tensor, match_thd: float = 0.0) -> Dict[str, np.ndarray]:
@@ -265,7 +282,7 @@ def match_images(
     # Match images
     matcher = Matching(matcher_name=matcher, extractor_name=extractor, max_keypoints=max_keypoints, device=device)
 
-    matches = matcher.match_images(image0, image1)
+    matches = matcher.match_images(image0, image1, match_thd=match_thd)
 
     # Visualize matches
     visualizer = MatchVisualizer()

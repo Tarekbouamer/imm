@@ -5,7 +5,7 @@
 ## Table of Contents 📑
 
 - [Prerequisites](#prerequisites)
-- [Installation 🖥️](#installation-)
+- [Installation 🖥️](#installation-️)
 - [Running with Docker 🐳](#running-with-docker-)
 - [Supported Algorithms](#supported-algorithms)
   - [Extractors](#supported-extractors)

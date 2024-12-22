@@ -218,7 +218,7 @@ class ImageMatchingGradioApp:
         matcher: str,
         max_size: int,
         max_keypoints: int,
-        min_conf: float,  # FIXME: add min_conf for extraction
+        math_thd: float,
         use_gpu: bool,
         force_cpu: bool,
         overlay_lines: bool,
@@ -241,14 +241,14 @@ class ImageMatchingGradioApp:
             image1 = image1.cuda()
 
         # Match images
-        self.image_matcher = Matching(
+        self.image_matcher: Matching = Matching(
             matcher_name=matcher,
             extractor_name=extractor,
             max_keypoints=max_keypoints,
             device="cuda" if use_gpu else "cpu",
         )
 
-        results = self.image_matcher.match_images(image0, image1)
+        results = self.image_matcher.match_images(image0, image1, math_thd)
 
         # Scale to original image size
         results["kpts0"] = np.array([kpt * scale0 for kpt in results["kpts0"]])

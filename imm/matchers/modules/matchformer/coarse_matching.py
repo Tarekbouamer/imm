@@ -61,7 +61,7 @@ class CoarseMatching(nn.Module):
         super().__init__()
         self.config = config
         # general config
-        self.thr = config["thr"]
+        self.thr = config["match_threshold"]
         self.border_rm = config["border_rm"]
         # -- # for trainig fine-level LoFTR
         self.train_coarse_percent = config["train_coarse_percent"]

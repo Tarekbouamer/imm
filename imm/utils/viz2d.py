@@ -182,8 +182,9 @@ class MatchVisualizer(Viz2D):
             )
 
         if mscores is not None:
-            valid = np.where(matches != -1)
+            valid = np.where(matches != -1)[0]
             mscores = mscores[valid]
+
             for i, score in enumerate(mscores):
                 kp0 = mkpts0[i]
                 kp1_offset = (
