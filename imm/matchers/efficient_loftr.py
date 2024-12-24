@@ -1,10 +1,9 @@
-from typing import Dict
+from typing import Any, Dict
 
 import torch
 import torchvision.transforms as tfm
 from einops.einops import rearrange
 from loguru import logger
-from pyparsing import Any
 
 from imm.base.matcher import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY

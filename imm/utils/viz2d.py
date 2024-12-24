@@ -6,7 +6,6 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
-from matplotlib import colormaps as cm
 
 # backend tk
 plt.switch_backend("tkagg")
@@ -100,7 +99,7 @@ class KeypointVisualizer(Viz2D):
         if scores is not None:
             if len(keypoints) != len(scores):
                 raise ValueError("Keypoints and scores must have the same length")
-            cmap = cm.get_cmap("coolwarm")
+            cmap = plt.get_cmap("coolwarm")
             norm = plt.Normalize(0, 1)
             for kp, score in zip(keypoints, scores):
                 color = cmap(norm(score))[:3]

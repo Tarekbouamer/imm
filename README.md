@@ -1,4 +1,9 @@
-# ImMatch (IMM) 🖼️
+<p align="left" style="display: flex; align-items: center;">
+    <img alt="ImMatch Logo" src="assets/logo.png", height=55, width="55" style="margin-right: 20px;">
+    <span style="font-size: 2em; font-weight: bold;">IMM for  Image Matching </span>
+</p>
+
+#
 
 **ImMatch (IMM)** is a versatile library for image matching and feature extraction in computer vision applications. It provides algorithms to detect, describe, and match keypoints between images, as well as estimate geometric relationships, making it ideal for tasks such as visual localization, augmented reality, and 3D reconstruction.
 
@@ -186,5 +191,10 @@ imm-gui
 
 # default: Running on local URL:  http://127.0.0.1:7860
 ```
+
+<p align="center">
+    <img src="assets/gui-0.png" width="45%" style="margin-right: 5%;">
+    <img src="assets/gui-1.png" width="45%">
+</p>
 
 Full guideline is available on the gradio interface web page.

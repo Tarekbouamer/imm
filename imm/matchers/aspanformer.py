@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 import torch
 import torchvision.transforms as tfn
 from einops.einops import rearrange
@@ -128,7 +130,7 @@ class ASpanFormer(MatcherModel):
             "scale11": scale11,
         }
 
-    def process_matches(self, data: torch.Dict[str, torch.Any], preds: torch.Tensor) -> torch.Dict[str, torch.Any]:
+    def process_matches(self, data: Dict[str, Any], preds: torch.Tensor) -> Dict[str, Any]:
         # mutuals
         matches = preds["matches"][0]
         mscores = preds["mscores"][0]
