@@ -1,5 +1,5 @@
 from .homography import CvHomographyEstimator, PoseLibHomographyEstimator, CV_H_SOLVERS  # noqa F401
-from .pnp import PoseLibPnPEstimator, PycolmapPnPEstimator
+from .pnp import OpenCVPnPEstimator, PoseLibPnPEstimator, PycolmapPnPEstimator
 
 ESTIMATORS_2D = ["homography"]
 ESTIMATORS_3D = ["pnp"]
@@ -26,5 +26,8 @@ def create_pnp_estimator(
         )
     elif backend == "pycolmap":
         return PycolmapPnPEstimator(max_reproj_error=max_reproj_error)
+
+    elif backend == "opencv":
+        return OpenCVPnPEstimator(max_reproj_error=max_reproj_error)
     else:
-        raise ValueError(f"Unknown PnP estimator: {backend}", available=["poselib", "pycolmap"])
+        raise ValueError(f"Unknown PnP estimator: {backend}", available=["poselib", "pycolmap", "opencv"])
