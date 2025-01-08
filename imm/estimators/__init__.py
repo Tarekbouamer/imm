@@ -1,19 +1,31 @@
-from .homography import CvHomographyEstimator, PoseLibHomographyEstimator, CV_H_SOLVERS  # noqa F401
+from .homography import OpenCVHomographyEstimator, PoseLibHomographyEstimator, PycolmapHomographyEstimator, CV_H_SOLVERS  # noqa F401
 from .pnp import OpenCVPnPEstimator, PoseLibPnPEstimator, PycolmapPnPEstimator
 
 ESTIMATORS_2D = ["homography"]
 ESTIMATORS_3D = ["pnp"]
 
 
-def create_homography_estimator(backend: str, solver: str, thd: float, max_iters: int, confidence: float):
+def create_homography_estimator(
+    backend: str,
+    solver: str = "ransac",
+    inlier_threshold: float = 4.0,
+    max_iters: int = 10000,
+    confidence: float = 0.9998,
+):
     """Create a homography estimator."""
 
-    if backend == "cv":
-        return CvHomographyEstimator(solver, thd, max_iters, confidence)
+    if backend == "opencv":
+        return OpenCVHomographyEstimator(
+            solver=solver, inlier_threshold=inlier_threshold, max_iters=max_iters, confidence=confidence
+        )
     elif backend == "poselib":
-        return PoseLibHomographyEstimator(solver, thd, max_iters, confidence)
+        return PoseLibHomographyEstimator(inlier_threshold=inlier_threshold, max_iters=max_iters, confidence=confidence)
+    elif backend == "pycolmap":
+        return PycolmapHomographyEstimator(
+            inlier_threshold=inlier_threshold, max_iters=max_iters, confidence=confidence
+        )
     else:
-        raise ValueError(f"Unknown homography estimator: {backend}", available=["cv", "poselib"])
+        raise ValueError(f"Unknown homography estimator: {backend}", available=["opencv", "poselib", "pycolmap"])
 
 
 def create_pnp_estimator(
