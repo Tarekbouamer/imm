@@ -1,0 +1,16 @@
+click>=8.0
+einops>=0.3
+gdown>=4.0
+gradio>4.40.0
+h5py>=3.3
+kornia>=0.7.3
+loguru>=0.5
+matplotlib==3.4
+numpy>=1.21,<2.0
+omegaconf>=2.1
+opencv-python>=4.5
+pytorch-lightning==1.5.2
+rich>=10.6
+scipy>=1.7
+timm>=0.4
+tqdm>=4.62

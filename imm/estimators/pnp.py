@@ -1,8 +1,7 @@
 from typing import Dict
+
 import numpy as np
 from loguru import logger
-
-from imm.utils.check import CHECK_SHAPE, CHECK_TYPE
 
 from .estimator import Estimator
 

@@ -66,9 +66,6 @@ class OpenCVHomographyEstimator(Estimator):
         """
         pts0 = pts0.reshape(-1, 2)
         pts1 = pts1.reshape(-1, 2)
-        
-        print(pts0.shape)
-        print(pts1.shape)
 
         # Compute homography
         H, mask = cv2.findHomography(

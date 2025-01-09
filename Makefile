@@ -11,10 +11,16 @@ install:
 	$(PIP) install .
 
 dev:
-	$(PIP) install -e .[dev,docs,test]
+	$(PIP) install -e .[dev,docs,test,extra]
 
 torch:
 	$(PIP) install torch torchvision --index-url https://download.pytorch.org/whl/cu118 --upgrade
+
+requirements:
+	$(PIP) install -r requirements.txt
+
+requirements-upgrade:
+	$(PIP) install -r requirements.txt --upgrade
 
 clean:
 	rm -rf build dist *.egg-info

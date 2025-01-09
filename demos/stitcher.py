@@ -1,7 +1,8 @@
 import os
-from pathlib import Path
 import random
-from typing import Dict, List, Optional, Tuple, Union
+import timeit
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import click
 import cv2
@@ -17,54 +18,37 @@ from imm.utils.device import detect_device
 from imm.utils.warnings import suppress_warnings
 
 
-class Image:
-    def __init__(self, image_path: Union[str, Path], id: int = -1, max_size: Optional[int] = None):
-        self.id = id
-        self.matches: Dict[int, int] = {}
-        self.data = self._load_image(str(image_path) if isinstance(image_path, Path) else image_path)
+def load_images(path: str, max_size: Optional[int] = None) -> List[np.ndarray]:
+    files: List[str] = os.listdir(path)
 
-        if max_size is not None:
-            self.data = self._resize(max_size)
+    image_extensions: List[str] = [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]
+    image_files: List[str] = sorted([f for f in files if os.path.splitext(f)[1].lower() in image_extensions])
 
-    @classmethod
-    def from_numpy(cls, image_array: np.ndarray, id: int = -1, max_size: Optional[int] = None) -> "Image":
-        if not isinstance(image_array, np.ndarray):
-            raise ValueError("image_array must be a numpy array.")
-        instance = cls.__new__(cls)
-        instance.id = id
-        instance.matches = {}
-        instance.data = image_array
+    image_paths: List[str] = [os.path.join(path, f) for f in image_files]
 
-        if max_size is not None:
-            instance.data = instance._resize(max_size)
-
-        return instance
-
-    def _load_image(self, image_path: str) -> np.ndarray:
-        image = cv2.imread(image_path)
+    list_image: List[np.ndarray] = []
+    for image_path in image_paths:
+        image: Optional[np.ndarray] = cv2.imread(image_path)
         if image is None:
-            raise ValueError(f"Failed to load image from path: {image_path}")
-        return image
+            print(f"Warning: Unable to read image {image_path}. Skipping...")
+            continue
 
-    def _resize(self, max_size: int) -> np.ndarray:
-        h, w = self.data.shape[:2]
-        scale = min(max_size / w, max_size / h)
-        new_w, new_h = int(w * scale), int(h * scale)
-        return cv2.resize(self.data, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        if max_size is not None:
+            h: int
+            w: int
+            h, w = image.shape[:2]
+            if max(h, w) > max_size:
+                scale: float = max_size / max(h, w)
+                new_size: Tuple[int, int] = (int(w * scale), int(h * scale))
+                image = cv2.resize(image, new_size)
 
-    def hw(self) -> Tuple[int, int]:
-        return self.data.shape[:2]
+        list_image.append(image)
 
-    def corners(self) -> np.ndarray:
-        h, w = self.hw()
-        return np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+    return list_image
 
-    def as_tensor(self, device: Union[str, torch.device] = "cpu") -> torch.Tensor:
-        tensor = torch.from_numpy(self.data).permute(2, 0, 1).float() / 255.0
-        return tensor.to(device)
 
-    def image(self) -> np.ndarray:
-        return self.data
+def to_tensor(image: np.ndarray, device: str = "cpu") -> torch.Tensor:
+    return torch.tensor(image.transpose(2, 0, 1)[None].astype(np.float32) / 255.0).to(device)
 
 
 class ImageStitcher:
@@ -73,169 +57,219 @@ class ImageStitcher:
         extractor: str = "superpoint",
         matcher: str = "superglue_outdoor",
         backend: str = "opencv",
-        max_size: Optional[int] = None,
-        min_matches: int = 10,
         max_keypoints: int = 1600,
         device: str = "cpu",
-    ):
-        self.max_size = max_size
-        self.min_matches = min_matches
-        self.device = device
+    ) -> None:
+        self.device: str = device
 
         # Matching
-        self.matcher = Matching(
+        self.matcher: Matching = Matching(
             matcher_name=matcher, extractor_name=extractor, max_keypoints=max_keypoints, device=device
         )
 
         # Homography
-        self.homography_estimator = create_homography_estimator(backend=backend)
+        self.homography_estimator: Any = create_homography_estimator(backend=backend)
 
-    def _find_matches(self, image0: Image, image1: Image) -> Dict[str, np.ndarray]:
-        matches = self.matcher.match_images(image0.as_tensor(self.device), image1.as_tensor(self.device))
-        return matches
+        logger.info(f"ImageStitcher initialized with backend={backend}, extractor={extractor}, matcher={matcher}")
 
-    def _compute_homography(self, matches: Dict[str, np.ndarray]) -> np.ndarray:
-        mkpts0, mkpts1 = matches["mkpts0"], matches["mkpts1"]
-        res = self.homography_estimator.estimate(mkpts0, mkpts1)
+    def _remove_black_area(self, panorama: np.ndarray, h_dst: int, conners: np.ndarray) -> np.ndarray:
+        """Remove black area in panorama image"""
+        # Min max of x,y coorners
+        [xmin, ymin] = np.int32(conners.min(axis=0).ravel() - 0.5)
+        t: List[int] = [-xmin, -ymin]
+        conners = conners.astype(int)
+
+        # conners[0][0][0] is the X coordinate of top-left point of warped image
+        # If it has value<0, warp image is merged to the left side of destination image
+        # otherwise is merged to the right side of destination image
+        if conners[0][0][0] < 0:
+            n: int = abs(-conners[1][0][0] + conners[0][0][0])
+            panorama = panorama[t[1] : h_dst + t[1], n:, :]
+        else:
+            if conners[2][0][0] < conners[3][0][0]:
+                panorama = panorama[t[1] : h_dst + t[1], 0 : conners[2][0][0], :]
+            else:
+                panorama = panorama[t[1] : h_dst + t[1], 0 : conners[3][0][0], :]
+        return panorama
+
+    def blending_mask(
+        self, height: int, width: int, barrier: int, smoothing_window: int, left_biased: bool = True
+    ) -> np.ndarray:
+        assert barrier < width
+        mask: np.ndarray = np.zeros((height, width))
+
+        offset: int = int(smoothing_window / 2)
+        try:
+            if left_biased:
+                mask[:, barrier - offset : barrier + offset + 1] = np.tile(
+                    np.linspace(1, 0, 2 * offset + 1).T, (height, 1)
+                )
+                mask[:, : barrier - offset] = 1
+            else:
+                mask[:, barrier - offset : barrier + offset + 1] = np.tile(
+                    np.linspace(0, 1, 2 * offset + 1).T, (height, 1)
+                )
+                mask[:, barrier + offset :] = 1
+        except BaseException:
+            if left_biased:
+                mask[:, barrier - offset : barrier + offset + 1] = np.tile(np.linspace(1, 0, 2 * offset).T, (height, 1))
+                mask[:, : barrier - offset] = 1
+            else:
+                mask[:, barrier - offset : barrier + offset + 1] = np.tile(np.linspace(0, 1, 2 * offset).T, (height, 1))
+                mask[:, barrier + offset :] = 1
+
+        return cv2.merge([mask, mask, mask])
+
+    def blending(self, dst_img_rz: np.ndarray, src_img_warped: np.ndarray, dst_w: int, side: str) -> np.ndarray:
+        h: int
+        w: int
+        h, w, _ = dst_img_rz.shape
+        smoothing_window: int = int(dst_w / 8)
+        barrier: int = dst_w - int(smoothing_window / 2)
+
+        # Create mask
+        mask1: np.ndarray = self.blending_mask(h, w, barrier, smoothing_window=smoothing_window, left_biased=True)
+        mask2: np.ndarray = self.blending_mask(h, w, barrier, smoothing_window=smoothing_window, left_biased=False)
+
+        if side == "left":
+            dst_img_rz = cv2.flip(dst_img_rz, 1)
+            src_img_warped = cv2.flip(src_img_warped, 1)
+            dst_img_rz = dst_img_rz * mask1
+            src_img_warped = src_img_warped * mask2
+            pano: np.ndarray = src_img_warped + dst_img_rz
+            pano = cv2.flip(pano, 1)
+        else:
+            dst_img_rz = dst_img_rz * mask1
+            src_img_warped = src_img_warped * mask2
+            pano = src_img_warped + dst_img_rz
+
+        return pano
+
+    def compute_homography(self, src_img: np.ndarray, dst_img: np.ndarray, ransacRep: float = 5.0) -> np.ndarray:
+        # Convert to tensor
+        src_img_tensor: torch.Tensor = to_tensor(src_img, self.device)
+        dst_img_tensor: torch.Tensor = to_tensor(dst_img, self.device)
+
+        # Match features
+        matches: Dict[str, np.ndarray] = self.matcher.match_images(src_img_tensor, dst_img_tensor)
+
+        # estimate homography
+        res: Dict[str, np.ndarray] = self.homography_estimator.estimate(matches["mkpts0"], matches["mkpts1"])
+
         return res["H"]
 
-    def _remove_black_regions(self, stitched_image: np.ndarray) -> np.ndarray:
-        gray = cv2.cvtColor(stitched_image, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    def warp_two_images(self, src_img: np.ndarray, dst_img: np.ndarray) -> np.ndarray:
+        """Warp two images and blend them together"""
 
-        if contours:
-            x, y, w, h = cv2.boundingRect(max(contours, key=cv2.contourArea))
-            stitched_image = stitched_image[y : y + h, x : x + w]
-        return stitched_image
+        # Compute homography matrix
+        H: np.ndarray = self.compute_homography(src_img, dst_img)
 
-    def _apply_homography(self, image: np.ndarray, H: np.ndarray, output_size: Tuple[int, int]) -> np.ndarray:
-        return cv2.warpPerspective(image, H, output_size)
+        # Get sizes
+        src_h: int
+        src_w: int
+        src_h, src_w = src_img.shape[:2]
+        dst_h: int
+        dst_w: int
+        dst_h, dst_w = dst_img.shape[:2]
 
-    def _draw_borders(self, image: np.ndarray, color: Tuple[int, int, int], thickness: int = 5) -> np.ndarray:
-        h, w = image.shape[:2]
-        bordered_image = cv2.rectangle(image, (0, 0), (w - 1, h - 1), color, thickness)
-        return bordered_image
+        # Conners of src and dst image
+        pts1: np.ndarray = np.float32([[0, 0], [0, src_h], [src_w, src_h], [src_w, 0]]).reshape(-1, 1, 2)
+        pts2: np.ndarray = np.float32([[0, 0], [0, dst_h], [dst_w, dst_h], [dst_w, 0]]).reshape(-1, 1, 2)
 
-    def _compute_pairwise_matches(self, images: List[Image]) -> Dict[Tuple[int, int], int]:
-        """Compute the number of matches between every pair of images."""
-        pairwise_matches = {}
-        for i in range(len(images)):
-            for j in range(i + 1, len(images)):
-                matches = self._find_matches(images[i], images[j])
-                pairwise_matches[(i, j)] = len(matches["mkpts0"])
-                pairwise_matches[(j, i)] = len(matches["mkpts0"])
-        return pairwise_matches
+        # Apply homography on src image
+        pts1_: np.ndarray = cv2.perspectiveTransform(pts1, H)
+        pts: np.ndarray = np.concatenate((pts1_, pts2), axis=0)
 
-    def _find_optimal_order(self, images: List[Image], pairwise_matches: Dict[Tuple[int, int], int]) -> List[int]:
-        """Find the optimal order to stitch images using a greedy approach."""
-        remaining_images = set(range(len(images)))
-        order = []
+        # Find min max of x,y coordinate
+        [xmin, ymin] = np.int64(pts.min(axis=0).ravel() - 0.5)
+        [_, ymax] = np.int64(pts.max(axis=0).ravel() + 0.5)
+        t: List[int] = [-xmin, -ymin]
 
-        # Start with the image that has the most matches with others
-        start_image = max(
-            remaining_images, key=lambda x: sum(pairwise_matches[(x, y)] for y in remaining_images if y != x)
-        )
-        order.append(start_image)
-        remaining_images.remove(start_image)
+        # top left point of image which apply homography matrix, which has x coordinate < 0, has side=left
+        # otherwise side=right
+        # source image is merged to the left side or right side of destination image
+        if pts[0][0][0] < 0:
+            side: str = "left"
+            width_pano: int = dst_w + t[0]
+        else:
+            width_pano: int = int(pts1_[3][0][0])
+            side: str = "right"
+        height_pano: int = ymax - ymin
 
-        # Greedily select the next image with the most matches to the current stitched image
-        while remaining_images:
-            last_image = order[-1]
-            next_image = max(remaining_images, key=lambda x: pairwise_matches[(last_image, x)])
-            order.append(next_image)
-            remaining_images.remove(next_image)
+        # Translation  (https://stackoverflow.com/a/20355545)
+        Ht: np.ndarray = np.array([[1, 0, t[0]], [0, 1, t[1]], [0, 0, 1]])
+        src_img_warped: np.ndarray = cv2.warpPerspective(src_img, Ht.dot(H), (width_pano, height_pano))
 
-        return order
+        # Generating size of dst_img_rz which has the same size as src_img_warped
+        dst_img_rz: np.ndarray = np.zeros((height_pano, width_pano, 3))
+        if side == "left":
+            dst_img_rz[t[1] : src_h + t[1], t[0] : dst_w + t[0]] = dst_img
+        else:
+            dst_img_rz[t[1] : src_h + t[1], :dst_w] = dst_img
 
-    def stitch_images(self, images: List[Image], draw: bool = False) -> np.ndarray:
-        # Compute pairwise matches
-        pairwise_matches = self._compute_pairwise_matches(images)
+        # Blending the two images into a panorama
+        pano: np.ndarray = self.blending(dst_img_rz, src_img_warped, dst_w, side)
 
-        # Find the optimal order to stitch images
-        optimal_order = self._find_optimal_order(images, pairwise_matches)
-        logger.info(f"Optimal stitching order: {optimal_order}")
+        # Remove black area
+        pano = self._remove_black_area(pano, dst_h, pts)
+        return pano
 
-        # Reorder images based on the optimal order
-        ordered_images = [images[i] for i in optimal_order]
+    def multi_stitching(self, list_images: List[np.ndarray]) -> np.ndarray:
+        """Stitching multiple images into a panorama"""
 
-        # Start with the first image in the optimal order
-        stitched = Image.from_numpy(ordered_images[0].image())
-        remaining_images = ordered_images[1:]
+        # Assuming the list of images is sorted from left to right
+        # Split the list of images into two halves
+        # Stitch the left half and the right half separately
 
-        # Define a list of colors for borders
-        border_colors = [
-            (255, 0, 0),  # Red
-            (0, 255, 0),  # Green
-            (0, 0, 255),  # Blue
-            (255, 255, 0),  # Cyan
-            (255, 0, 255),  # Magenta
-            (0, 255, 255),  # Yellow
-        ]
+        n: int = int(len(list_images) / 2 + 0.5)
+        left: List[np.ndarray] = list_images[:n]
+        right: List[np.ndarray] = list_images[n - 1 :]
+        right.reverse()
 
-        if draw:
-            stitched.data = self._draw_borders(stitched.data, random.choice(border_colors))
+        # Stitch the left half
+        while len(left) > 1:
+            dst_img: np.ndarray = left.pop()
+            src_img: np.ndarray = left.pop()
+            left_pano: np.ndarray = self.warp_two_images(src_img, dst_img)
+            left_pano = left_pano.astype("uint8")
+            left.append(left_pano)
 
-        while remaining_images:
-            logger.info(f"Remaining images to stitch: {len(remaining_images)}")
-            found_match = False
+        # Stitch the right half
+        while len(right) > 1:
+            dst_img: np.ndarray = right.pop()
+            src_img: np.ndarray = right.pop()
+            right_pano: np.ndarray = self.warp_two_images(src_img, dst_img)
+            right_pano = right_pano.astype("uint8")
+            right.append(right_pano)
 
-            # Search for the next image with enough matches
-            for i, next_image in enumerate(remaining_images):
-                matches = self._find_matches(stitched, next_image)
-                if len(matches["mkpts0"]) >= self.min_matches:
-                    logger.info(f"Found a match with image {next_image.id} ({len(matches['mkpts0'])} matches)")
-                    found_match = True
-                    break
+        # If width_right_pano > width_left_pano
+        # Select right_pano as destination.
+        # Otherwise is left_pano
+        if right_pano.shape[1] >= left_pano.shape[1]:
+            panorama: np.ndarray = self.warp_two_images(left_pano, right_pano)
+        else:
+            panorama: np.ndarray = self.warp_two_images(right_pano, left_pano)
 
-            if not found_match:
-                logger.warning("No more images with sufficient matches found. Stopping stitching.")
-                break
+        return panorama
 
-            # Compute homography and stitch the found image
-            H = self._compute_homography(matches)
+    def stitch_images(self, input: str, resize: Optional[int] = None) -> np.ndarray:
+        """Stitching multiple images into a panorama"""
 
-            corners1 = stitched.corners().reshape(-1, 1, 2)
-            corners2 = cv2.perspectiveTransform(next_image.corners().reshape(-1, 1, 2), H)
-            all_corners = np.vstack((corners1, corners2))
-            [x_min, y_min], [x_max, y_max] = (
-                np.int32(all_corners.min(axis=0).flatten()),
-                np.int32(all_corners.max(axis=0).flatten()),
-            )
-            output_size = (x_max - x_min, y_max - y_min)
+        # Load images
+        list_images: List[np.ndarray] = load_images(input, resize)
 
-            translation = np.array([[1, 0, -x_min], [0, 1, -y_min], [0, 0, 1]])
-            stitched_image = self._apply_homography(stitched.image(), translation @ H, output_size)
+        # Stitch images
+        panorama: np.ndarray = self.multi_stitching(list_images)
 
-            if draw:
-                next_image.data = self._draw_borders(
-                    next_image.data, border_colors[len(stitched.matches) % len(border_colors)]
-                )
+        return panorama
 
-            stitched_image[-y_min : -y_min + next_image.hw()[0], -x_min : -x_min + next_image.hw()[1]] = (
-                next_image.image()
-            )
-            stitched_image = self._remove_black_regions(stitched_image)
-            stitched = Image.from_numpy(stitched_image)
-
-            # Remove the stitched image from the queue
-            remaining_images.pop(i)
-
-        logger.info("Stitching completed")
-        return stitched.image()
-
-    def __call__(self, image_paths: List[str], visualize: bool = False, draw: bool = False) -> np.ndarray:
-        image_objects = [Image(image_path, id=i, max_size=self.max_size) for i, image_path in enumerate(image_paths)]
-        stitched_image = self.stitch_images(image_objects, draw=draw)
-
-        if visualize:
-            self.visualize(stitched_image)
-
-        return stitched_image
+    def __call__(self, input: str, resize: Optional[int] = None) -> np.ndarray:
+        return self.stitch_images(input, resize)
 
     def visualize(self, stitched_image: np.ndarray) -> None:
-        window_name = "Stitched Image"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        """Visualize the stitched image"""
+        window_name: str = "Stitched Image"
+        stitched_image = stitched_image.astype("uint8")
         cv2.imshow(window_name, stitched_image)
 
         while cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1:
@@ -245,8 +279,8 @@ class ImageStitcher:
 
 
 @click.command()
-@click.option("--input", required=True, help="Folder containing the images to be stitched.")
-@click.option("--output", required=True, help="Path to save the stitched image.")
+@click.option("--input", required=True, help="Path to input directory")
+@click.option("--output", default="assets", help="Path to output directory")
 @click.option(
     "--extractor", default="superpoint", type=click.Choice(SUPPORTED_EXTRACTORS), help="Feature extractor to use."
 )
@@ -256,55 +290,51 @@ class ImageStitcher:
 @click.option(
     "--backend", default="opencv", type=click.Choice(["opencv", "pycolmap", "poselib"]), help="Homography backend."
 )
-@click.option("--max_size", default=None, type=int, help="Maximum size (width or height) for resizing images.")
-@click.option("--min_matches", default=500, type=int, help="Minimum number of matches to consider a valid pair.")
+@click.option("--resize", type=int, default=0, help="Enter 1 to resize the resolution to 4x lower.")
 @click.option("--max_keypoints", default=-1, type=int, help="Maximum number of keypoints to detect.")
 @click.option("--force_cpu", is_flag=False, help="Force the use of CPU instead of GPU")
 @click.option("--visualize", is_flag=True, help="Visualize the stitched image.")
-@click.option("--draw", is_flag=True, help="Draw borders around each image in the stitched result.")
+@click.help_option("-h", "--help", help="Show this message and exit.")
 @suppress_warnings()
-def main(
+def stitch(
     input: str,
-    output: str,
+    output: Optional[str],
     extractor: str,
     matcher: str,
     backend: str,
-    max_size: Optional[int],
-    min_matches: int,
+    resize: int,
     max_keypoints: int,
     force_cpu: bool,
     visualize: bool,
-    draw: bool,
 ) -> None:
-    logger.info("Starting image stitching process")
+    """Stitch multiple images into a panorama"""
+    logger.info("Stitching images...")
 
     # Device
-    device = detect_device(force_cpu)
+    device: str = detect_device(force_cpu)
 
-    image_paths = sorted(
-        [os.path.join(input, f) for f in os.listdir(input) if f.lower().endswith(("png", "jpg", "jpeg", "bmp", "tiff"))]
-    )
-    if not image_paths:
-        logger.error("No images found in the specified folder")
-        raise ValueError("No images to stitch")
-
-    stitcher = ImageStitcher(
+    # Create panorama
+    stitcher: ImageStitcher = ImageStitcher(
         extractor=extractor,
         matcher=matcher,
         backend=backend,
-        max_size=max_size,
-        min_matches=min_matches,
         max_keypoints=max_keypoints,
         device=device,
     )
-    stitched_image = stitcher(image_paths, visualize=visualize, draw=draw)
 
-    if os.path.isdir(output):
-        output = os.path.join(output, "stitched_image.jpg")
+    # Stitch images
+    panorama: np.ndarray = stitcher(input, resize)
 
-    cv2.imwrite(output, stitched_image)
-    logger.info(f"Stitched image saved to {output}")
+    # Save the result
+    output_path: str = os.path.join(output, "panorama.jpg") if output else "panorama.jpg"
+    cv2.imwrite(output_path, panorama)
+    logger.info(f"Panorama saved to {output_path}")
+
+    if visualize:
+        stitcher.visualize(panorama)
+
+    logger.success("Done!")
 
 
 if __name__ == "__main__":
-    main()
+    stitch()

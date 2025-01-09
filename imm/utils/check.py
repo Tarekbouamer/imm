@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Type, TypeVar
+from typing import Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch
@@ -17,11 +17,12 @@ def CHECK(condition: bool, msg: Optional[str] = None, raises: bool = True) -> bo
     return True
 
 
-def CHECK_TYPE(x: object, typ: Type[T] | Tuple[Type[T], ...], msg: Optional[str] = None, raises: bool = True) -> bool:
+def CHECK_TYPE(
+    x: object, typ: Union[Type[T], Tuple[Type[T], ...]], msg: Optional[str] = None, raises: bool = True
+) -> bool:
     """
     Checks if a variable is of a specified type.
     """
-    #
     return CHECK(isinstance(x, typ), f"Invalid type: {type(x)}. {msg or ''}", raises=raises)
 
 

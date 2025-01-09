@@ -210,5 +210,24 @@ python demo/pnp_chessboard.py [INPUT_PATH] [CALIBRATION_FILE]
 Options:
   --backend Backend to use.
             [opencv|poselib|pycolmap]
-
 ```
+
+```bash
+# Panorama stitching demo
+python demo/stitcher.py [OPTIONS]
+
+Options:
+  --input TEXT      Path to input directory 
+  --output TEXT     Path to output directory
+  --extractor       Feature extractor to use.
+  --matcher         Feature matcher to use.
+  --backend         Homography backend.
+                    [opencv|pycolmap|poselib]
+                                  
+  --resize          Maximum image size.
+  --max_keypoints   Maximum number of keypoints to detect.
+  --visualize       Visualize the stitched image.
+```
+<p align="center">
+    <img src="assets/panorama.jpg" width="100%">
+</p>
