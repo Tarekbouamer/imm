@@ -78,7 +78,9 @@ def draw(img, corners, imgpts):
 @click.command()
 @click.argument("input_path", type=click.Path(exists=True), default="assets/chessboard.jpg")
 @click.argument("calibration_file", type=click.Path(exists=True), default="assets/calib.npz")
-@click.option("--backend", type=click.Choice(["opencv", "poselib", "pycolmap"]), default="poselib", help="Backend to use.")
+@click.option(
+    "--backend", type=click.Choice(["opencv", "poselib", "pycolmap"]), default="poselib", help="Backend to use."
+)
 @click.help_option("--help", "-h")
 def handle_input(input_path, calibration_file, backend):
     calib_data = np.load(calibration_file)

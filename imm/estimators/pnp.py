@@ -26,7 +26,7 @@ except ImportError:
 
 
 class PycolmapPnPEstimator(Estimator):
-    def __init__(self, max_reproj_error=12.0):
+    def __init__(self, max_reproj_error=12.0, **kwargs):
         self.max_reproj_error = max_reproj_error
 
     def estimate(self, pts2d: np.ndarray, pts3d: np.ndarray, camera: Dict, **kwargs):
@@ -73,7 +73,7 @@ class PycolmapPnPEstimator(Estimator):
 
 
 class PoseLibPnPEstimator(Estimator):
-    def __init__(self, max_reproj_error=12.0, max_epipolar_error=1.0, max_iterations=100):
+    def __init__(self, max_reproj_error=12.0, max_epipolar_error=1.0, max_iterations=100, **kwargs):
         self.max_reproj_error = max_reproj_error
         self.max_epipolar_error = max_epipolar_error
         self.max_iterations = max_iterations
@@ -126,7 +126,7 @@ class PoseLibPnPEstimator(Estimator):
 
 
 class OpenCVPnPEstimator(Estimator):
-    def __init__(self, max_reproj_error=8.0):
+    def __init__(self, max_reproj_error=8.0, **kwargs):
         self.max_reproj_error = max_reproj_error
 
     def estimate(self, pts2d: np.ndarray, pts3d: np.ndarray, camera: Dict, dist: np.ndarray = None, **kwargs) -> Dict:

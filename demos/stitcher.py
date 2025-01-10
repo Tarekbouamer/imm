@@ -1,8 +1,5 @@
 import os
-import random
-import timeit
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import click
 import cv2
@@ -33,7 +30,7 @@ def load_images(path: str, max_size: Optional[int] = None) -> List[np.ndarray]:
             print(f"Warning: Unable to read image {image_path}. Skipping...")
             continue
 
-        if max_size is not None:
+        if max_size is not None and max_size > 0:
             h: int
             w: int
             h, w = image.shape[:2]
@@ -290,7 +287,7 @@ class ImageStitcher:
 @click.option(
     "--backend", default="opencv", type=click.Choice(["opencv", "pycolmap", "poselib"]), help="Homography backend."
 )
-@click.option("--resize", type=int, default=0, help="Enter 1 to resize the resolution to 4x lower.")
+@click.option("--resize", type=int, default=-1, help="Resize images to a maximum size.")
 @click.option("--max_keypoints", default=-1, type=int, help="Maximum number of keypoints to detect.")
 @click.option("--force_cpu", is_flag=False, help="Force the use of CPU instead of GPU")
 @click.option("--visualize", is_flag=True, help="Visualize the stitched image.")

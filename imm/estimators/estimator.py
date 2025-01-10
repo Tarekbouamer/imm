@@ -1,18 +1,16 @@
-from typing import Any
+from abc import ABC, abstractmethod
+from typing import Any, Dict
 
 
-class Estimator:
-    def __init__(self):
-        """Estimators."""
+class Estimator(ABC):
+    @abstractmethod
+    def estimate(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        """Estimate the parameters of the model."""
         pass
 
-    def estimate(self, *args) -> Any:
-        """Placeholder for the estimate method."""
-        raise NotImplementedError("The estimate method should be implemented in the derived class.")
-
-    def __call__(self, *args) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """Allow the estimator to be called like a function."""
-        return self.estimate(*args)
+        return self.estimate(*args, **kwargs)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"

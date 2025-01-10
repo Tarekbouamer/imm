@@ -109,7 +109,7 @@ ImMatch supports a wide range of feature extractors, matchers, and geometric est
 |--------------------|:----------------:|:----------------:|:----------------:|
 | Fundamental Matrix |                  |                  |                  |
 | Essential Matrix   |                  |                  |                  |
-| Homography         |:white_check_mark:|                  |:white_check_mark:|
+| Homography         |:white_check_mark:|:white_check_mark:|:white_check_mark:|
 | PnP                |:white_check_mark:|:white_check_mark:|:white_check_mark:|
 
 ## Usage
