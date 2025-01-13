@@ -77,7 +77,7 @@ class OpenCVHomographyEstimator(Estimator):
             pts1: Second set of points (Nx2 array).
 
         Returns:
-            Dictionary containing the estimated homography matrix, success status, and number of inliers
+            Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
 
         # Check if OpenCV is available
@@ -86,7 +86,8 @@ class OpenCVHomographyEstimator(Estimator):
             return {
                 "H": None,
                 "success": False,
-                "inliers": 0,
+                "inliers": None,
+                "num_inliers": 0,
             }
 
         try:
@@ -117,15 +118,17 @@ class OpenCVHomographyEstimator(Estimator):
                     "H": H,
                     "success": False,
                     "inliers": 0,
+                    "num_inliers": 0,
                 }
 
             # Count inliers
-            inliers = int(mask.sum()) if mask is not None else 0
+            num_inliers = int(mask.sum()) if mask is not None else 0
 
             return {
                 "H": H,
                 "success": True,
-                "inliers": inliers,
+                "inliers": mask.reshape(-1).astype(bool),
+                "num_inliers": num_inliers,
             }
 
         except Exception as e:
@@ -133,7 +136,8 @@ class OpenCVHomographyEstimator(Estimator):
             return {
                 "H": None,
                 "success": False,
-                "inliers": 0,
+                "inliers": None,
+                "num_inliers": 0,
             }
 
     def __repr__(self):
@@ -186,7 +190,7 @@ class PoseLibHomographyEstimator(Estimator):
             pts1: Second set of points (Nx2 array).
 
         Returns:
-            Dictionary containing the estimated homography matrix, success status, and number of inliers
+            Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
 
         # Check if PoseLib is available
@@ -195,7 +199,8 @@ class PoseLibHomographyEstimator(Estimator):
             return {
                 "H": None,
                 "success": False,
-                "inliers": 0,
+                "inliers": None,
+                "num_inliers": 0,
             }
 
         try:
@@ -228,11 +233,7 @@ class PoseLibHomographyEstimator(Estimator):
             )
 
             if H is None:
-                return {
-                    "H": H,
-                    "success": False,
-                    "inliers": 0,
-                }
+                return {"H": H, "success": False, "inliers": None}
 
             return {
                 "H": H,
@@ -245,7 +246,8 @@ class PoseLibHomographyEstimator(Estimator):
             return {
                 "H": None,
                 "success": False,
-                "inliers": 0,
+                "inliers": None,
+                "num_inliers": 0,
             }
 
     def __repr__(self):
@@ -290,7 +292,7 @@ class PycolmapHomographyEstimator(Estimator):
             pts1: Second set of points (Nx2 array).
 
         Returns:
-            Dictionary containing the estimated homography matrix, success status, and number of inliers
+            Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
 
         # Check if Pycolmap is available
@@ -321,14 +323,19 @@ class PycolmapHomographyEstimator(Estimator):
             res = pycolmap.homography_matrix_estimation(pts0, pts1, options)
 
             if res is None:
-                return {"H": None, "success": False, "inliers": 0}
+                return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
 
-            return {"H": res["H"], "success": True if res is not None else False, "inliers": res["inliers"]}
+            return {
+                "H": res["H"],
+                "success": True if res is not None else False,
+                "inliers": res["inliers"],
+                "num_inliers": res["num_inliers"],
+            }
         except Exception as e:
             logger.error(
                 f"Error in PycolmapHomographyEstimator: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}"
             )
-            return {"H": None, "success": False, "inliers": 0}
+            return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
 
     def __repr__(self):
         return f"{self.__class__.__name__}(inlier_threshold={self.inlier_threshold}, min_inlier_ratio={self.min_inlier_ratio}, confidence={self.confidence}, max_iters={self.max_iters}, min_iters={self.min_iters})"
@@ -394,7 +401,7 @@ class HomographyEstimator(Estimator):
             pts1: Second set of points (Nx2 array).
 
         Returns:
-            Dictionary containing the estimated homography matrix, success status, and number of inliers
+            Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
         return self.estimator.estimate(pts0, pts1)
 

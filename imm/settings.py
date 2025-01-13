@@ -9,6 +9,7 @@ img1_piazza = "assets/phototourism_sample_images/piazza_san_marco_18627786_59292
 img0_path_indoor = "assets/scannet/scene0783_00_480.jpg"
 img1_path_indoor = "assets/scannet/scene0783_00_1530.jpg"
 
+
 # Emii
 emii = namedtuple("emii", ["extractor", "matcher", "img0", "img1"])
 

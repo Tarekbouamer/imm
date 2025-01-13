@@ -1,5 +1,7 @@
 from loguru import logger
 
+from imm.estimators.relative_pose import OpenCVRelativePoseEstimator
+
 from .homography import (  # noqa F401
     CV_H_SOLVERS,
     OpenCVHomographyEstimator,
@@ -64,4 +66,25 @@ def create_pnp_estimator(
         raise ValueError(f"Unknown PnP estimator: {backend}", available=["poselib", "pycolmap", "opencv"])
 
     logger.info(f"Created PnP estimator: {estimator}")
+    return estimator
+
+
+def create_relative_pose_estimator(
+    backend: str,
+    solver: str = "ransac",
+    threshold: float = 1.0,
+    confidence: float = 0.999,
+    max_iters: int = 1000,
+    **kwargs,
+):
+    """Create a relative pose estimator with the specified backend."""
+
+    if backend == "opencv":
+        estimator = OpenCVRelativePoseEstimator(
+            solver=solver, threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
+        )
+    else:
+        raise ValueError(f"Unknown relative pose estimator: {backend}", available=["opencv"])
+
+    logger.info(f"Created relative pose estimator: {estimator}")
     return estimator

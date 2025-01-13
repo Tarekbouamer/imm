@@ -1,36 +1,50 @@
+from pathlib import Path
 from typing import Optional
 
 import click
+import numpy as np
 from loguru import logger
 
-from imm.estimators import CV_H_SOLVERS, ESTIMATORS_2D, create_homography_estimator
+from imm.estimators import CV_H_SOLVERS, create_homography_estimator, create_relative_pose_estimator
 from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
 from imm.tools.match import Matching, load_and_process_image
 from imm.utils.device import detect_device
+from imm.utils.viz2d import MatchVisualizer
 from imm.utils.warnings import suppress_warnings
+from imm.estimators._helper import Camera
+
+# Suppress warnings
+suppress_warnings()
 
 
-@click.command()
+@click.group()
+@click.help_option("--help", "-h")
+def cli():
+    """Estimation tools for image transformations."""
+    logger.info("Welcome to the estimation tools for image transformations.")
+
+
+@cli.command()
 @click.argument("img0_path", type=click.Path(exists=True), default=default_img0_path)
 @click.argument("img1_path", type=click.Path(exists=True), default=default_img1_path)
-@click.option("--estimator", default="homography", help="Estimator name", type=click.Choice(ESTIMATORS_2D))
 @click.option("--matcher", default="superglue_outdoor", help="Matcher name")
 @click.option("--extractor", default="superpoint", help="Extractor name")
-@click.option("--backend", default="cv", type=click.Choice(["cv", "poselib", "pycolmap"]), help="Estimator backend")
+@click.option(
+    "--backend", default="opencv", type=click.Choice(["opencv", "poselib", "pycolmap"]), help="Estimator backend"
+)
 @click.option("--solver", default="ransac", type=click.Choice(CV_H_SOLVERS.keys()), help="Homography solver")
 @click.option("--thd", default=2.0, type=float, help="Reprojection error threshold")
 @click.option("--max_iters", default=1000, type=int, help="Max iterations")
 @click.option("--confidence", default=0.998, type=float, help="Confidence level")
 @click.option("--max_size", default=None, type=int, help="Max image size")
 @click.option("--output_dir", default="output", help="Output directory for logs and visualization")
-@click.option("--force_cpu", is_flag=False, help="Force the use of CPU instead of GPU")
+@click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
+@click.option("visualize", "--visualize", is_flag=True, help="Visualize the matches")
 @click.help_option("--help", "-h")
-@suppress_warnings()
-def estimate(
+def homography(
     img0_path: str,
     img1_path: str,
-    estimator: str,
     matcher: str,
     extractor: str,
     backend: str,
@@ -41,43 +55,159 @@ def estimate(
     max_size: Optional[int],
     output_dir: str,
     force_cpu: bool,
+    visualize: bool,
 ):
-    """Estimate the transformation between two images."""
-
-    logger.info(f"Starting image estimation process {estimator}-{backend}")
+    """Estimate the homography transformation between two images."""
+    logger.info(f"Homography estimation using {backend} backend")
 
     # Device
     device = detect_device(force_cpu)
 
     # Load and process images
-    image0 = load_and_process_image(img0_path, max_size, device)[0]
-    image1 = load_and_process_image(img1_path, max_size, device)[0]
+    image0, image0_cv = load_and_process_image(img0_path, max_size, device)
+    image1, image1_cv = load_and_process_image(img1_path, max_size, device)
 
     # Match images
     matcher_model = Matching(matcher_name=matcher, device=device, extractor_name=extractor)
-    preds = matcher_model.match_images(image0, image1)
+    m_preds = matcher_model.match_images(image0, image1)
 
     # Get the estimator
-    if estimator == "homography":
-        estimator = create_homography_estimator(backend, solver, thd, max_iters, confidence)
-    else:
-        raise ValueError(f"Unknown estimator: {estimator}", available=["homography"])
+    h_estimator = create_homography_estimator(backend, solver, thd, max_iters, confidence)
 
     # Estimate the transformation
-    preds = estimator.estimate(preds["mkpts0"], preds["mkpts1"])
+    h_preds = h_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"])
 
-    sucess = preds["success"]
-    H = preds["H"]
-    inliers = preds["inliers"]
+    if h_preds["success"]:
+        H = h_preds["H"]
+        inliers = h_preds["inliers"]
 
-    if sucess:
+        # filter out the inliers
+        mkpts0 = m_preds["mkpts0"][inliers]
+        mkpts1 = m_preds["mkpts1"][inliers]
+
+        m_valid = np.where(m_preds["matches"] > -1)[0]
+
+        matches = m_preds["matches"][m_valid][inliers]
+        mscores = m_preds["mscores"][m_valid][inliers]
+
+        # Visualize the matches
+        if visualize:
+            vis = MatchVisualizer()
+
+            vis.draw_matches(
+                image0_cv,
+                image1_cv,
+                m_preds["kpts0"],
+                m_preds["kpts1"],
+                mkpts0,
+                mkpts1,
+                matches=matches,
+                mscores=mscores,
+            )
+
         logger.info(f"Estimation successful: {H}")
         logger.info(f"Inliers: {inliers}")
+
     else:
         logger.error("Estimation failed")
 
-    logger.success("Estimation completed successfully")
+    logger.info("Estimation completed")
+
+
+@cli.command()
+@click.argument("img0_path", type=click.Path(exists=True), default=default_img0_path)
+@click.argument("img1_path", type=click.Path(exists=True), default=default_img1_path)
+@click.option("--matcher", default="superglue_outdoor", help="Matcher name")
+@click.option("--extractor", default="superpoint", help="Extractor name")
+@click.option(
+    "--backend", default="opencv", type=click.Choice(["opencv", "poselib", "pycolmap"]), help="Estimator backend"
+)
+@click.option("--solver", default="ransac", type=click.Choice(["ransac", "usac_magsac"]), help="Pose solver")
+@click.option("--threshold", default=1.0, type=float, help="Threshold value")
+@click.option("--confidence", default=0.999, type=float, help="Confidence level")
+@click.option("--max_iters", default=1000, type=int, help="Max iterations")
+@click.option("--max_size", default=None, type=int, help="Max image size")
+@click.option("--output_dir", default="output", help="Output directory for logs and visualization")
+@click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
+@click.option("visualize", "--visualize", is_flag=True, help="Visualize the matches")
+@click.help_option("--help", "-h")
+def relative_pose(
+    img0_path: str,
+    img1_path: str,
+    matcher: str,
+    extractor: str,
+    backend: str,
+    solver: str,
+    threshold: float,
+    confidence: float,
+    max_iters: int,
+    max_size: Optional[int],
+    output_dir: str,
+    force_cpu: bool,
+    visualize: bool,
+):
+    """Estimate the relative pose between two images."""
+    logger.info(f"Relative pose estimation using {backend} backend")
+
+    # Device
+    device = detect_device(force_cpu)
+
+    # Load and process images
+    image0, image0_cv = load_and_process_image(img0_path, max_size, device)
+    image1, image1_cv = load_and_process_image(img1_path, max_size, device)
+
+    # Get image dimensions
+    camera0 = Camera.from_image(image0)
+    camera1 = Camera.from_image(image1)
+
+
+    # Match images
+    matcher_model = Matching(matcher_name=matcher, device=device, extractor_name=extractor)
+    m_preds = matcher_model.match_images(image0, image1)
+
+    # Get the estimator
+    r_estimator = create_relative_pose_estimator(backend, solver, threshold, confidence, max_iters)
+
+    # Estimate the transformation
+    r_preds = r_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
+
+    if r_preds["success"]:
+        R = r_preds["R"]
+        t = r_preds["t"]
+        inliers = r_preds["inliers"]
+
+        # filter out the inliers
+        mkpts0 = m_preds["mkpts0"][inliers]
+        mkpts1 = m_preds["mkpts1"][inliers]
+
+        m_valid = np.where(m_preds["matches"] > -1)[0]
+
+        matches = m_preds["matches"][m_valid][inliers]
+        mscores = m_preds["mscores"][m_valid][inliers]
+
+        # Visualize the matches
+        if visualize:
+            vis = MatchVisualizer()
+
+            vis.draw_matches(
+                image0_cv,
+                image1_cv,
+                m_preds["kpts0"],
+                m_preds["kpts1"],
+                mkpts0,
+                mkpts1,
+                matches=matches,
+                mscores=mscores,
+            )
+
+        logger.info(f"Estimation successful: {R}, {t}")
+        logger.info(f"Inliers: {inliers}")
+
+    else:
+        logger.error("Estimation failed")
+
+    logger.info("Estimation completed")
 
 
 if __name__ == "__main__":
-    estimate()
+    cli()
