@@ -59,23 +59,23 @@ class Viz2D:
 
     def draw_composite_image(
         self,
+        image0: Union[np.ndarray, str, Path],
         image1: Union[np.ndarray, str, Path],
-        image2: Union[np.ndarray, str, Path],
         offset: int = 10,
     ) -> np.ndarray:
+        image0 = self.ensure_rgb(image0)
         image1 = self.ensure_rgb(image1)
-        image2 = self.ensure_rgb(image2)
 
+        h0, w0, _ = image0.shape
         h1, w1, _ = image1.shape
-        h2, w2, _ = image2.shape
 
-        max_height = max(h1, h2)
-        total_width = w1 + w2 + offset
+        max_height = max(h0, h1)
+        total_width = w0 + w1 + offset
 
         composite_image = np.ones((max_height, total_width, 3), dtype=np.uint8) * 255
 
-        composite_image[:h1, :w1, :] = image1
-        composite_image[:h2, w1 + offset : w1 + offset + w2, :] = image2
+        composite_image[:h0, :w0, :] = image0
+        composite_image[:h1, w0 + offset : w0 + offset + w1, :] = image1
 
         self.results = composite_image  # Store the drawn result
         return composite_image
@@ -130,8 +130,8 @@ class MatchVisualizer(Viz2D):
 
     def draw_matches(
         self,
+        image0: Union[np.ndarray, str, Path],
         image1: Union[np.ndarray, str, Path],
-        image2: Union[np.ndarray, str, Path],
         kpts0: np.ndarray,
         kpts1: np.ndarray,
         mkpts0: np.ndarray,
@@ -141,12 +141,12 @@ class MatchVisualizer(Viz2D):
         color_inliers: Optional[Tuple[int, int, int]] = (0, 0, 255),
         color_outliers: Optional[Tuple[int, int, int]] = (255, 0, 0),
         color_lines: Optional[Tuple[int, int, int]] = (0, 255, 0),
-        title="Matches",
+        title: str = "Matches",
         show_image: bool = True,
-    ):
+    ) -> np.ndarray:
+        image0_rgb = self.ensure_rgb(image0)
         image1_rgb = self.ensure_rgb(image1)
-        image2_rgb = self.ensure_rgb(image2)
-        composite_image = self.draw_composite_image(image1_rgb, image2_rgb)
+        composite_image = self.draw_composite_image(image0_rgb, image1_rgb)
 
         # Draw all keypoints
         for kp in kpts0:
@@ -154,13 +154,13 @@ class MatchVisualizer(Viz2D):
         for kp in kpts1:
             cv2.circle(
                 composite_image,
-                (int(kp[0]) + image1_rgb.shape[1] + 10, int(kp[1])),
+                (int(kp[0]) + image0_rgb.shape[1] + 10, int(kp[1])),
                 3,
                 color_outliers,
                 -1,
             )
 
-        # Draw  mutual keypoints
+        # Draw mutual keypoints
         for i in range(len(mkpts0)):
             cv2.circle(
                 composite_image,
@@ -171,25 +171,21 @@ class MatchVisualizer(Viz2D):
             )
             cv2.circle(
                 composite_image,
-                (
-                    int(mkpts1[i][0]) + image1_rgb.shape[1] + 10,
-                    int(mkpts1[i][1]),
-                ),
+                (int(mkpts1[i][0]) + image0_rgb.shape[1] + 10, int(mkpts1[i][1])),
                 3,
                 color_inliers,
                 -1,
             )
 
+        # Draw match lines
         if mscores is not None:
             valid = np.where(matches != -1)[0]
             mscores = mscores[valid]
+            mscores = mscores / mscores.max()  # Normalize scores to [0, 1]
 
             for i, score in enumerate(mscores):
                 kp0 = mkpts0[i]
-                kp1_offset = (
-                    mkpts1[i][0] + image1_rgb.shape[1] + 10,
-                    mkpts1[i][1],
-                )
+                kp1_offset = (mkpts1[i][0] + image0_rgb.shape[1] + 10, mkpts1[i][1])
                 color = tuple(int(c * score) for c in color_lines)
                 cv2.line(
                     composite_image,
@@ -198,9 +194,45 @@ class MatchVisualizer(Viz2D):
                     color,
                     1,
                 )
-        # title with number of keypoints of image 0 and image 1 and matches
+
         title = f"{title} (kpts0: {len(kpts0)}, kpts1: {len(kpts1)}, matches: {len(mkpts0)})"
+        self.draw_image(composite_image, title, show_image=show_image)
+        return composite_image
+
+    def draw_epipolar_line(
+        self,
+        image0: Union[np.ndarray, str, Path],
+        image1: Union[np.ndarray, str, Path],
+        F: np.ndarray,
+        kpts0: np.ndarray,
+        kpts1: np.ndarray,
+        title: str = "Epipolar Line",
+        show_image: bool = True,
+    ) -> np.ndarray:
+        if F.shape != (3, 3):
+            raise ValueError("Fundamental matrix F must be a 3x3 matrix.")
+
+        image0_rgb = self.ensure_rgb(image0)
+        image1_rgb = self.ensure_rgb(image1)
+        composite_image = self.draw_composite_image(image0_rgb, image1_rgb)
+
+        h0, w0 = image0_rgb.shape[:2]
+        h1, w1 = image1_rgb.shape[:2]
+
+        for pt0, pt1 in zip(kpts0, kpts1):
+            cv2.circle(composite_image, (int(pt0[0]), int(pt0[1])), 5, (0, 0, 255), -1)
+
+            pt1_h = np.array([pt0[0], pt0[1], 1]).reshape(3, 1)
+            epip_line = F @ pt1_h
+            a, b, c = epip_line.flatten()
+
+            if b != 0:  # Avoid division by zero
+                x0, x1 = 0, w1 - 1
+                y0 = int((-a * x0 - c) / b)
+                y1 = int((-a * x1 - c) / b)
+                cv2.line(composite_image, (w0 + x0, y0), (w0 + x1, y1), (0, 255, 0), 1)
+
+            cv2.circle(composite_image, (w0 + int(pt1[0]), int(pt1[1])), 5, (255, 0, 0), -1)
 
         self.draw_image(composite_image, title, show_image=show_image)
-
         return composite_image

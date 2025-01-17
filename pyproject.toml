@@ -34,7 +34,7 @@ imm-gui = "imm.ui:main"
 
 [project.optional-dependencies]
 extra = [
-    "pycolmap==0.6.1",
+    "pycolmap==0.4.0",
     "poselib @ git+https://github.com/PoseLib/PoseLib.git@9c8f3ca1baba69e19726cc7caded574873ec1f9e",
 ]
 dev = ["black>=22.0", "flake8>=4.0", "isort>=5.0"]

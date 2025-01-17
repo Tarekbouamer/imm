@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 
 from imm.estimators import create_pnp_estimator
+from imm.estimators._camera import Camera
 
 
 def quaternion_to_rotation_vector(qvec):
@@ -24,16 +25,12 @@ def process_frame(img, estimator, cmx, dist):
         objp = np.zeros((6 * 9, 3), np.float32)
         objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)
 
+        # Camera
         height, width = img.shape[:2]
+        camera = Camera(np.array([width, height, cmx[0, 0], cmx[1, 1], cmx[0, 2], cmx[1, 2], 0.0, 0.0]), "PINHOLE")
 
-        camera = {
-            "model": "SIMPLE_PINHOLE",
-            "width": width,
-            "height": height,
-            "params": [cmx[0, 0], cmx[1, 1], cmx[0, 2], cmx[1, 2]],
-        }
-
-        ret = estimator.estimate(corners2, objp, camera, dist=dist)
+        # Estimate
+        ret = estimator.estimate(corners2.reshape(-1, 2), objp, camera, dist=dist)
 
         if ret["success"] is False:
             raise ValueError("Estimation failed.")

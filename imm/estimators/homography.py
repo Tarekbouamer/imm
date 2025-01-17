@@ -5,6 +5,7 @@ from loguru import logger
 
 from imm.utils.check import CHECK_SHAPE, CHECK_TYPE
 
+from ._helper import get_backend
 from .estimator import Estimator
 
 try:
@@ -132,7 +133,7 @@ class OpenCVHomographyEstimator(Estimator):
             }
 
         except Exception as e:
-            logger.error(f"Error in OpenCVHomographyEstimator: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
+            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {
                 "H": None,
                 "success": False,
@@ -177,6 +178,15 @@ class PoseLibHomographyEstimator(Estimator):
         self.confidence = confidence
         self.progressive_sampling = progressive_sampling
 
+        # RANSAC options
+        self.ransac_options = {
+            "max_error": inlier_threshold,
+            "max_iterations": max_iters,
+            "min_iterations": min_iters,
+            "success_prob": confidence,
+            "progressive_sampling": progressive_sampling,
+        }
+
         assert (
             self.min_iters < self.max_iters
         ), f"min_iters={self.min_iters} should be less than max_iters={self.max_iters}"
@@ -216,20 +226,11 @@ class PoseLibHomographyEstimator(Estimator):
             if len(pts0) < 4 or len(pts1) < 4:
                 raise ValueError("At least 4 points are required to estimate homography.")
 
-            # Ransac options
-            ransac_options = {
-                "max_iterations": self.max_iters,
-                "min_iterations": self.min_iters,
-                "success_prob": self.confidence,
-                "max_reproj_error": self.inlier_threshold,
-                "progressive_sampling": self.progressive_sampling,
-            }
-
             # Estimate homography
             H, status = poselib.estimate_homography(
                 pts0,
                 pts1,
-                ransac_opt=ransac_options,
+                ransac_opt=self.ransac_options,
             )
 
             if H is None:
@@ -242,7 +243,7 @@ class PoseLibHomographyEstimator(Estimator):
             }
 
         except Exception as e:
-            logger.error(f"Error in PoseLibHomographyEstimator: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
+            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {
                 "H": None,
                 "success": False,
@@ -283,6 +284,14 @@ class PycolmapHomographyEstimator(Estimator):
         self.max_iters = max_iters
         self.min_iters = min_iters
 
+        # RANSAC options
+        self.options = pycolmap.RANSACOptions()
+        self.options.max_error = inlier_threshold
+        self.options.min_inlier_ratio = min_inlier_ratio
+        self.options.confidence = confidence
+        self.options.max_num_trials = max_iters
+        self.options.min_num_trials = min_iters
+
     def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> Dict[str, Union[Any]]:
         """
         Estimate homography.
@@ -311,16 +320,8 @@ class PycolmapHomographyEstimator(Estimator):
             if len(pts0) < 4 or len(pts1) < 4:
                 raise ValueError("At least 4 points are required to estimate homography.")
 
-            # RANSAC options
-            options = pycolmap.RANSACOptions()
-            options.max_error = self.inlier_threshold
-            options.min_inlier_ratio = self.min_inlier_ratio
-            options.confidence = self.confidence
-            options.max_num_trials = self.max_iters
-            options.min_num_trials = self.min_iters
-
             # Estimate homography
-            res = pycolmap.homography_matrix_estimation(pts0, pts1, options)
+            res = pycolmap.homography_matrix_estimation(pts0, pts1, self.options)
 
             if res is None:
                 return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
@@ -332,30 +333,11 @@ class PycolmapHomographyEstimator(Estimator):
                 "num_inliers": res["num_inliers"],
             }
         except Exception as e:
-            logger.error(
-                f"Error in PycolmapHomographyEstimator: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}"
-            )
+            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
 
     def __repr__(self):
         return f"{self.__class__.__name__}(inlier_threshold={self.inlier_threshold}, min_inlier_ratio={self.min_inlier_ratio}, confidence={self.confidence}, max_iters={self.max_iters}, min_iters={self.min_iters})"
-
-
-def get_backend():
-    """
-    Get the default backend for homography estimation.
-
-    Returns:
-        Default backend for homography estimation.
-    """
-    if cv2 is not None:
-        return "opencv"
-    elif poselib is not None:
-        return "poselib"
-    elif pycolmap is not None:
-        return "pycolmap"
-    else:
-        raise ValueError("No backend found for homography estimation.")
 
 
 class HomographyEstimator(Estimator):
@@ -363,11 +345,11 @@ class HomographyEstimator(Estimator):
     Unified Homography Estimator.
 
     Args:
-        method: Estimation method to use (default: "cv2").
-        solver: Solver method to use (default: "ransac").
-        inlier_threshold: RANSAC reprojection threshold (default: 0.5).
-        max_iters: Maximum number of iterations (default: 1000).
-        confidence: Confidence level for the estimation (default: 0.998).
+        backend (str): Backend to use. Default is the available backend by priority.
+        solver (str): Solver method to use (default: "ransac").
+        inlier_threshold (float): RANSAC reprojection threshold (default: 0.5).
+        max_iters (int): Maximum number of iterations (default: 1000).
+        confidence (float): Confidence level for the estimation (default: 0.998).
     """
 
     def __init__(
@@ -381,6 +363,7 @@ class HomographyEstimator(Estimator):
     ):
         super().__init__()
 
+        # Choose the backend
         method = method if not None else get_backend()
 
         if method == "opencv":
@@ -406,4 +389,4 @@ class HomographyEstimator(Estimator):
         return self.estimator.estimate(pts0, pts1)
 
     def __repr__(self):
-        return self.estimator.__repr__()
+        return f"{self.__class__.__name__}(estimator={self.estimator})"

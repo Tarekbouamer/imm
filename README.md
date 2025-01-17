@@ -109,6 +109,7 @@ ImMatch supports a wide range of feature extractors, matchers, and geometric est
 |--------------------|:----------------:|:----------------:|:----------------:|
 | Fundamental Matrix |                  |                  |                  |
 | Essential Matrix   |                  |                  |                  |
+| Relative Pose      |:white_check_mark:|:white_check_mark:|:white_check_mark:|
 | Homography         |:white_check_mark:|:white_check_mark:|:white_check_mark:|
 | PnP                |:white_check_mark:|:white_check_mark:|:white_check_mark:|
 
@@ -164,10 +165,13 @@ imm-match assets/graffiti.png assets/graffiti.png --matcher superglue_outdoor --
 Use the `imm-estimate` script to estimate geometric relationships between two images:
 
 ```bash
-imm-estimate IMG0_PATH IMG1_PATH [OPTIONS]
+imm-estimate [OPTIONS] COMMAND [ARGS]
+
+  Commands:
+    homography     Estimate the homography transformation between two images.
+    relative-pose  Estimate the relative pose between two images.
 
   Options:
-    --estimator       Estimator name
     --matcher         Matcher name
     --extractor       Extractor name
     --backend         Estimator backend "cv|poselib|pycolmap"
@@ -179,7 +183,7 @@ imm-estimate IMG0_PATH IMG1_PATH [OPTIONS]
     --output_dir      Output directory for logs and visualization
 
 # example
-imm-estimate assets/graffiti.png assets/graffiti.png --estimator homography --matcher superglue_outdoor --extractor superpoint --max_img_size 1000 --output_dir results --threshold 0.2 
+imm-estimate homography assets/graffiti.png assets/graffiti.png --matcher superglue_outdoor --extractor superpoint --max_img_size 1000 --output_dir results --threshold 0.2 
 ```
 
 ### Gradio Interface 🌐 (:construction:)
@@ -228,6 +232,7 @@ Options:
   --max_keypoints   Maximum number of keypoints to detect.
   --visualize       Visualize the stitched image.
 ```
+
 <p align="center">
     <img src="assets/panorama.jpg" width="100%">
 </p>

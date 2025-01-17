@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Optional
 
 import click
@@ -6,13 +5,13 @@ import numpy as np
 from loguru import logger
 
 from imm.estimators import CV_H_SOLVERS, create_homography_estimator, create_relative_pose_estimator
+from imm.estimators._camera import Camera
 from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
 from imm.tools.match import Matching, load_and_process_image
 from imm.utils.device import detect_device
 from imm.utils.viz2d import MatchVisualizer
 from imm.utils.warnings import suppress_warnings
-from imm.estimators._helper import Camera
 
 # Suppress warnings
 suppress_warnings()
@@ -106,7 +105,6 @@ def homography(
             )
 
         logger.info(f"Estimation successful: {H}")
-        logger.info(f"Inliers: {inliers}")
 
     else:
         logger.error("Estimation failed")
@@ -156,10 +154,12 @@ def relative_pose(
     image0, image0_cv = load_and_process_image(img0_path, max_size, device)
     image1, image1_cv = load_and_process_image(img1_path, max_size, device)
 
-    # Get image dimensions
-    camera0 = Camera.from_image(image0)
-    camera1 = Camera.from_image(image1)
+    # h, w of the image0
+    h, w = image0_cv.shape[:2]
 
+    # Get image dimensions
+    camera0 = Camera.from_image(image0_cv)
+    camera1 = Camera.from_image(image1_cv)
 
     # Match images
     matcher_model = Matching(matcher_name=matcher, device=device, extractor_name=extractor)
@@ -168,15 +168,15 @@ def relative_pose(
     # Get the estimator
     r_estimator = create_relative_pose_estimator(backend, solver, threshold, confidence, max_iters)
 
-    # Estimate the transformation
-    r_preds = r_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
+    # Estimate
+    r_preds = r_estimator.estimate(m_preds["mkpts0"].copy(), m_preds["mkpts1"].copy(), camera0, camera1)
 
     if r_preds["success"]:
-        R = r_preds["R"]
-        t = r_preds["t"]
+        #
+        R, t, E = r_preds["R"], r_preds["t"], r_preds["E"]
         inliers = r_preds["inliers"]
 
-        # filter out the inliers
+        # Filter out the inliers
         mkpts0 = m_preds["mkpts0"][inliers]
         mkpts1 = m_preds["mkpts1"][inliers]
 
@@ -185,10 +185,13 @@ def relative_pose(
         matches = m_preds["matches"][m_valid][inliers]
         mscores = m_preds["mscores"][m_valid][inliers]
 
+        F = np.linalg.inv(camera1.K).T @ E @ np.linalg.inv(camera0.K)
+
         # Visualize the matches
         if visualize:
             vis = MatchVisualizer()
 
+            # draw inlier matches
             vis.draw_matches(
                 image0_cv,
                 image1_cv,
@@ -200,13 +203,21 @@ def relative_pose(
                 mscores=mscores,
             )
 
+            # draw epipolar lines
+            vis.draw_epipolar_line(
+                image0_cv,
+                image1_cv,
+                F,
+                kpts0=mkpts0,
+                kpts1=mkpts1,
+            )
+
         logger.info(f"Estimation successful: {R}, {t}")
-        logger.info(f"Inliers: {inliers}")
 
     else:
         logger.error("Estimation failed")
 
-    logger.info("Estimation completed")
+    logger.success("Estimation completed")
 
 
 if __name__ == "__main__":

@@ -1,17 +1,18 @@
 from loguru import logger
 
-from imm.estimators.relative_pose import OpenCVRelativePoseEstimator
+from imm.estimators.relative_pose import (
+    OpenCVRelativePoseEstimator,
+    PoseLibRelativePoseEstimator,
+    PycolmapRelativePoseEstimator,
+)
 
-from .homography import (  # noqa F401
-    CV_H_SOLVERS,
+from .homography import (
+    CV_H_SOLVERS,  # noqa
     OpenCVHomographyEstimator,
     PoseLibHomographyEstimator,
     PycolmapHomographyEstimator,
 )
 from .pnp import OpenCVPnPEstimator, PoseLibPnPEstimator, PycolmapPnPEstimator
-
-ESTIMATORS_2D = ["homography"]
-ESTIMATORS_3D = ["pnp"]
 
 
 def create_homography_estimator(
@@ -48,8 +49,6 @@ def create_pnp_estimator(
 ):
     """Create a PnP estimator with the specified backend."""
 
-    # TODO : Verify All the available backends and typing of the parameters
-
     if backend == "poselib":
         estimator = PoseLibPnPEstimator(
             max_reproj_error=max_reproj_error,
@@ -83,8 +82,16 @@ def create_relative_pose_estimator(
         estimator = OpenCVRelativePoseEstimator(
             solver=solver, threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
         )
+    elif backend == "poselib":
+        estimator = PoseLibRelativePoseEstimator(
+            threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
+        )
+    elif backend == "pycolmap":
+        estimator = PycolmapRelativePoseEstimator(
+            threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
+        )
     else:
-        raise ValueError(f"Unknown relative pose estimator: {backend}", available=["opencv"])
+        raise ValueError(f"Unknown relative pose estimator: {backend}", available=["opencv", "poselib", "pycolmap"])
 
     logger.info(f"Created relative pose estimator: {estimator}")
     return estimator
