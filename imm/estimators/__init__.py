@@ -1,5 +1,10 @@
 from loguru import logger
 
+from imm.estimators.fundamental import (
+    OpenCVFundamentalEstimator,
+    PoseLibFundamentalEstimator,
+    PycolmapFundamentalEstimator,
+)
 from imm.estimators.relative_pose import (
     OpenCVRelativePoseEstimator,
     PoseLibRelativePoseEstimator,
@@ -94,4 +99,35 @@ def create_relative_pose_estimator(
         raise ValueError(f"Unknown relative pose estimator: {backend}", available=["opencv", "poselib", "pycolmap"])
 
     logger.info(f"Created relative pose estimator: {estimator}")
+    return estimator
+
+
+def create_fundamental_estimator(
+    backend: str,
+    solver: str = "ransac",
+    threshold: float = 1.0,
+    confidence: float = 0.999,
+    max_iters: int = 1000,
+    **kwargs,
+):
+    """Create a fundamental matrix estimator with the specified backend."""
+
+    if backend == "opencv":
+        estimator = OpenCVFundamentalEstimator(
+            solver=solver, inlier_threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
+        )
+    elif backend == "poselib":
+        estimator = PoseLibFundamentalEstimator(
+            inlier_threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
+        )
+    elif backend == "pycolmap":
+        estimator = PycolmapFundamentalEstimator(
+            inlier_threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
+        )
+    else:
+        raise ValueError(
+            f"Unknown fundamental matrix estimator: {backend}", available=["opencv", "poselib", "pycolmap"]
+        )
+
+    logger.info(f"Created fundamental matrix estimator: {estimator}")
     return estimator

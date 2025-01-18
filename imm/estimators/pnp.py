@@ -299,11 +299,11 @@ class PnPEstimator(Estimator):
         # Choose the backend
         backend = backend if not None else get_backend()
 
-        if self.backend == "opencv":
+        if backend == "opencv":
             self.estimator = OpenCVPnPEstimator(max_reproj_error=max_reproj_error, **kwargs)
-        elif self.backend == "pycolmap":
+        elif backend == "pycolmap":
             self.estimator = PycolmapPnPEstimator(max_reproj_error=max_reproj_error, **kwargs)
-        elif self.backend == "poselib":
+        elif backend == "poselib":
             self.estimator = PoseLibPnPEstimator(
                 max_reproj_error=max_reproj_error,
                 max_epipolar_error=max_epipolar_error,
@@ -332,4 +332,4 @@ class PnPEstimator(Estimator):
         return self.estimator.estimate(pts2d, pts3d, camera, **kwargs)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(backend={self.backend})"
+        return f"{self.__class__.__name__}(estimator={self.estimator})"

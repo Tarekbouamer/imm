@@ -34,7 +34,6 @@ class Camera:
 
     @classmethod
     def from_image(cls, image: np.ndarray):
-        print("image shape", image.shape)
         h, w = image.shape[:2]
         return cls(np.array([w, h, w, h, w // 2, h // 2, 0.0, 0.0]), "PINHOLE")
 
@@ -42,7 +41,7 @@ class Camera:
     def from_dict(cls, data: Dict):
         """Create a Camera object from a dictionary."""
         # {model: str, width: int, height: int, params: List[float]}
-        return cls(np.array(data["params"]), data["model"])
+        return cls(np.array([data["width"], data["height"], *data["params"]]), data["model"])
 
     @classmethod
     def from_K(cls, K: np.ndarray, width: int = None, height: int = None):
@@ -158,7 +157,6 @@ class Camera:
         p2d = self.denormalize(p2d)
         return p2d
 
-    # to world coordinates
     def image2world(self, p2d: np.ndarray, R: np.ndarray, t: np.ndarray) -> np.ndarray:
         """Convert 2D pixel coordinates to world coordinates.
 
@@ -169,13 +167,8 @@ class Camera:
 
         """
         p3d = self.image2camera(p2d)
-        print("p3d", p3d.shape)
-        print("R", R.shape)
-        print("t", t.shape)
         p3d_r = R @ p3d.T
-        print("p3d_r", p3d_r.shape)
         p3d_t = p3d_r + t
-        print("p3d_t", p3d_t.shape)
         return p3d_t.T
 
     def __repr__(self):

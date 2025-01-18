@@ -29,7 +29,7 @@ except ImportError:
     cv2 = None
     logger.warning("OpenCV not found. OpenCVPnPEstimator will not work.")
 
-CV_SOLVERS = {
+CV_RP_SOLVERS = {
     "ransac": cv2.RANSAC,
     "usac_magsac": cv2.USAC_MAGSAC,
 }
@@ -53,8 +53,8 @@ class OpenCVRelativePoseEstimator(Estimator):
         max_iters: int = 1000,
     ):
         super().__init__()
-        if solver not in CV_SOLVERS:
-            raise ValueError(f"Invalid solver: {solver}. Valid options are: {list(CV_SOLVERS.keys())}")
+        if solver not in CV_RP_SOLVERS:
+            raise ValueError(f"Invalid solver: {solver}. Valid options are: {list(CV_RP_SOLVERS.keys())}")
 
         self.solver = solver
         self.threshold = threshold
@@ -122,7 +122,7 @@ class OpenCVRelativePoseEstimator(Estimator):
                 pts0,
                 pts1,
                 cameraMatrix=np.eye(3),
-                method=CV_SOLVERS[self.solver],
+                method=CV_RP_SOLVERS[self.solver],
                 threshold=norm_threshold,
                 prob=self.confidence,
                 maxIters=self.max_iters,
@@ -458,4 +458,4 @@ class RelativePoseEstimator(Estimator):
         return self.estimator.estimate(pts0, pts1, camera0, camera1)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(backend='{self.estimator.__class__.__name__}')"
+        return f"{self.__class__.__name__}(estimator={self.estimator})"

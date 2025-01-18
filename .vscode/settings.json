@@ -7,6 +7,7 @@
     "todo-tree.general.showActivityBarBadge": true,
     "workbench.tree.indent": 15,
     "python.analysis.typeCheckingMode": "off",
-    "cSpell.enabled": false,
+    "cSpell.enabled": true,
+    "python.analysis.autoImportCompletions": true,
 
 }
