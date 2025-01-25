@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from loguru import logger
+from omegaconf import OmegaConf
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -39,7 +40,7 @@ class ModelBase(nn.Module):
             cfg (Dict[str, Any]): Configuration dictionary for the model.
         """
         super().__init__()
-        self.cfg = cfg
+        self.cfg = OmegaConf.create(cfg) if isinstance(cfg, dict) else cfg
 
     def build_model(self) -> None:
         """

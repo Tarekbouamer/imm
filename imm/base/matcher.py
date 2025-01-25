@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Union
 
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from .model_base import ModelBase
 
@@ -35,7 +35,6 @@ class MatcherModel(ModelBase):
             cfg (Union[dict, DictConfig]): Configuration dictionary or DictConfig object.
         """
         super().__init__(cfg=cfg)
-        self.cfg = OmegaConf.create(cfg) if isinstance(cfg, dict) else cfg
 
     def transform_inputs(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """

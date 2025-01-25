@@ -34,7 +34,7 @@ class FeatureModel(ModelBase):
         Returns:
             Dict[str, Any]: Transformed input data dictionary.
         """
-        # Default implementation: no transformation
+        # pass through by default
         return data
 
     @torch.no_grad()
@@ -64,10 +64,10 @@ class FeatureModel(ModelBase):
         # Scale keypoints back to original size
         if "scale" in data:
             scale = data["scale"]
-            kpst = preds["kpts"][0]
+            kpts = preds["kpts"][0]
 
-            kpst = kpst * scale
-            preds["kpts"] = [kpst]
+            kpts = kpts * scale
+            preds["kpts"] = [kpts]
 
         return preds
 

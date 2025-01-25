@@ -1,5 +1,6 @@
 from .aspanformer import aspanformer_indoor, aspanformer_outdoor
 from .efficient_loftr import efficient_loftr
+from .gluestick import gluestick
 from .lighterglue import lighterglue
 from .lightglue import (
     lightglue_aliked,
@@ -16,6 +17,7 @@ __all__ = [
     "aspanformer_indoor",
     "aspanformer_outdoor",
     "efficient_loftr",
+    "gluestick",
     "lighterglue",
     "lightglue_aliked",
     "lightglue_disk",

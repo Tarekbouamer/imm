@@ -13,7 +13,7 @@ from imm.settings import img0_path
 from imm.utils.dataset import ImagesFromList
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
-from imm.utils.viz2d import KeypointVisualizer
+from imm.utils.viz2d import ImageVisualizer
 from imm.utils.writers import FeaturesWriter
 
 
@@ -141,6 +141,24 @@ def extract(
         # Flatten the output
         preds = {k: v[0] if isinstance(v, list) else v for k, v in preds.items()}
 
+        if "lines" in preds:
+            lines = preds["lines"]
+            keypoints = preds.get("kpts", None)
+
+            lines = lines[0].reshape(-1, 4)
+            keypoints = keypoints[0] if keypoints is not None else None
+
+            print(f"Detected lines: {lines.shape}")
+            print(f"Keypoints: {keypoints.shape if keypoints is not None else 0}")
+            logger.info(f"Detected lines: {len(lines)}")
+
+            vis = ImageVisualizer(image_cv)
+            vis.draw_keypoints(keypoints=keypoints)
+            vis.draw_lines(lines=lines)
+            vis.show()
+
+            return preds
+
         # Extract keypoints, scores, and descriptors
         kpts = preds.get("kpts", None)
         scores = preds.get("scores", None)
@@ -150,8 +168,9 @@ def extract(
         logger.info(f"Descriptors: {descs.shape if descs is not None else 0}")
 
         # Visualize keypoints
-        visualizer = KeypointVisualizer()
-        visualizer.draw_keypoints(image_cv, kpts, scores)
+        vis = ImageVisualizer()
+        vis.draw_keypoints(keypoints=kpts, scores=scores, image=image_cv)
+        vis.show()
 
         return preds
 

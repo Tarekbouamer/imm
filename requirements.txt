@@ -12,5 +12,6 @@ opencv-python>=4.5
 pytorch-lightning==1.5.2
 rich>=10.6
 scipy>=1.7
+scikit-learn
 timm>=0.4
 tqdm>=4.62

@@ -15,7 +15,7 @@ from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
 from imm.tools.match import Matching, load_and_process_image
 from imm.utils.device import detect_device
-from imm.utils.viz2d import MatchVisualizer
+from imm.utils.viz2d import TwoViewVisualizer
 from imm.utils.warnings import suppress_warnings
 
 # Suppress warnings
@@ -100,11 +100,9 @@ def homography(
 
         # Visualize the matches
         if visualize:
-            vis = MatchVisualizer()
+            vis = TwoViewVisualizer(image0_cv, image1_cv)
 
-            vis.draw_matches(
-                image0_cv,
-                image1_cv,
+            vis.draw_point_matches(
                 m_preds["kpts0"],
                 m_preds["kpts1"],
                 mkpts0,
@@ -112,6 +110,7 @@ def homography(
                 matches=matches,
                 mscores=mscores,
             )
+            vis.show()
 
         logger.info(f"Estimation successful: {H}")
 
@@ -198,12 +197,10 @@ def relative_pose(
 
         # Visualize the matches
         if visualize:
-            vis = MatchVisualizer()
+            vis = TwoViewVisualizer(image0_cv, image1_cv)
 
             # draw inlier matches
-            vis.draw_matches(
-                image0_cv,
-                image1_cv,
+            vis.draw_point_matches(
                 m_preds["kpts0"],
                 m_preds["kpts1"],
                 mkpts0,
@@ -213,13 +210,12 @@ def relative_pose(
             )
 
             # draw epipolar lines
-            vis.draw_epipolar_line(
-                image0_cv,
-                image1_cv,
+            vis.draw_epipolar_lines(
                 F,
                 kpts0=mkpts0,
                 kpts1=mkpts1,
             )
+            vis.show()
 
         logger.info(f"Estimation successful: {R}, {t}")
 
@@ -296,12 +292,10 @@ def fundamental(
 
         # Visualize the matches
         if visualize:
-            vis = MatchVisualizer()
+            vis = TwoViewVisualizer(image0_cv, image1_cv)
 
             # draw inlier matches
-            vis.draw_matches(
-                image0_cv,
-                image1_cv,
+            vis.draw_point_matches(
                 m_preds["kpts0"],
                 m_preds["kpts1"],
                 mkpts0,
@@ -311,13 +305,12 @@ def fundamental(
             )
 
             # draw epipolar lines
-            vis.draw_epipolar_line(
-                image0_cv,
-                image1_cv,
+            vis.draw_epipolar_lines(
                 F,
                 kpts0=mkpts0,
                 kpts1=mkpts1,
             )
+            vis.show()
 
         logger.info(f"Estimation successful: {F}")
 
