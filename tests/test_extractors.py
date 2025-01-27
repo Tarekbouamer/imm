@@ -44,6 +44,8 @@ def test_all_registered_extractors():
 
     models = EXTRACTORS_REGISTRY.list_models
 
+    # FIXME: Fix tests for lines
+
     for model in models:
         try:
             kpts, scores, descs = extract_keypoints(model, image)

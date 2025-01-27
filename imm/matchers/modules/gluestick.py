@@ -32,7 +32,6 @@ def normalize_keypoints(kpts, shape_or_size):
         assert isinstance(shape_or_size, torch.Tensor)
         size = shape_or_size.to(kpts)
 
-    # TODO: Check if this is correct
     size = size.unsqueeze(0)
     c = size / 2
     f = size.max(1, keepdim=True).values * 0.7  # somehow we used 0.7 for SG
