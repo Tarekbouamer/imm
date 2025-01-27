@@ -20,9 +20,6 @@ version = { attr = "imm.__version__" }
 readme = { file = "README.md", content-type = "text/markdown" }
 dependencies = { file = "requirements.txt" }
 
-# [tool.setuptools]
-# long-description-content-type = "text/markdown"
-
 
 [project.urls]
 Homepage = "https://github.com/Tarekbouamer/imm"
@@ -38,12 +35,11 @@ imm-gui = "imm.ui:main"
 
 [project.optional-dependencies]
 extra = [
-    # "pycolmap==0.4.0",
-    # "poselib @ git+https://github.com/PoseLib/PoseLib.git@v2.0.4",
-    # "poselib==2.0.4",
-    # "pytlsd @ git+https://github.com/iago-suarez/pytlsd.git@v0.0.5",
-
+    "pycolmap==0.4.0",
+    "poselib==2.0.4",
+    "pytlsd @ git+https://github.com/iago-suarez/pytlsd.git@v0.0.5",
 ]
+
 dev = ["black>=22.0", "flake8>=4.0", "isort>=5.0"]
 docs = ["sphinx>=4.0", "sphinx-rtd-theme>=0.5"]
 test = ["pytest>=6.0", "pytest-cov>=3.0", "tox>=3.0"]
