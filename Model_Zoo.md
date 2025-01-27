@@ -11,7 +11,7 @@ ImMatch supports a wide range of feature extractors, matchers, and geometric est
 | Caps          |`caps_sp` | MegaDepth         | [Paper](https://arxiv.org/pdf/2004.13324) / [Code](https://github.com/qianqianwang68/caps) |
 | D2-Net        |`d2net_ots` `d2net_tf` `d2net_tf_no_phototourism`   | MegaDepth | [Paper](https://arxiv.org/abs/1905.03561) / [Code](https://github.com/mihaidusmanu/d2-net) |
 | DISK          |`disk_depth` `disk_epipolar` | MegaDepth | [Paper](https://arxiv.org/abs/2006.13566) / [Code](https://github.com/cvlab-epfl/disk) |
-| R2D2          |`2d2_WASF_N16` `r2d2_WASF_N8_big` `r2d2_WAF_N16` `faster2d2_WASF_N16` `faster2d2_WASF_N8_big`    | 1M Oxford and Paris Revisited         | [Paper](https://arxiv.org/abs/1906.06195) / [Code](https://github.com/naver/r2d2) |
+| R2D2          |`r2d2_WASF_N16` `r2d2_WASF_N8_big` `r2d2_WAF_N16` `faster2d2_WASF_N16` `faster2d2_WASF_N8_big`    | 1M Oxford and Paris Revisited         | [Paper](https://arxiv.org/abs/1906.06195) / [Code](https://github.com/naver/r2d2) |
 | Superpoint    |`superpoint` | COCO-MS | [Paper](https://arxiv.org/abs/1712.07629) / [Code](https://github.com/magicleap/SuperPointPretrainedNetwork) |
 | XFeat         |`xfeat_spare` `xfeat_dense` | ScanNet / MegaDepth | [Paper](https://arxiv.org/abs/2404.19174) / [Code](https://github.com/verlab/accelerated_features) |
 
@@ -19,7 +19,7 @@ ImMatch supports a wide range of feature extractors, matchers, and geometric est
 
 | Model         | Variants | Training Datasets | Links|
 |-------------- |----------|-------------------|------|
-| LSD           |`lsd`     | NA         | [Paper](https://www.ipol.im/pub/art/2012/gjmr-lsd/) / [Python](https://github.com/iago-suarez/pytlsd)
+| LSD           |`lsd`     | NA         | [Paper](https://www.ipol.im/pub/art/2012/gjmr-lsd/) / [Python](https://github.com/iago-suarez/pytlsd) |
 | DeepLSD       | `deep_lsd` | Wireframe/ MegaDepth  | [Paper](https://arxiv.org/abs/2212.07766) / [Code](https://github.com/cvg/DeepLSD) |
 
 ### Wireframe Extractors

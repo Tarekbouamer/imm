@@ -104,6 +104,7 @@ class Extraction:
 @click.option("--force_cpu", is_flag=True, help="Force using CPU")
 @click.option("--print_freq", default=100, help="Frequency to print extraction details")
 @click.option("--output_dir", default="output", help="Path to save extracted features")
+@click.option("--visualize", is_flag=True, help="Visualize the extracted features")
 @click.help_option("--help", "-h")
 def extract(
     extractor: str,
@@ -116,6 +117,7 @@ def extract(
     force_cpu: bool,
     print_freq: int,
     output_dir: str,
+    visualize: bool,
 ):
     """Extracts features from an image or a dataset."""
     #  device
@@ -141,36 +143,17 @@ def extract(
         # Flatten the output
         preds = {k: v[0] if isinstance(v, list) else v for k, v in preds.items()}
 
+        # Visualizer
+        vis = ImageVisualizer(image_cv)
+
         if "lines" in preds:
-            lines = preds["lines"]
-            keypoints = preds.get("kpts", None)
+            vis.draw_lines(lines=preds["lines"])
 
-            lines = lines[0].reshape(-1, 4)
-            keypoints = keypoints[0] if keypoints is not None else None
+        if "kpts" in preds:
+            vis.draw_keypoints(keypoints=preds["kpts"], scores=preds["scores"])
 
-            print(f"Detected lines: {lines.shape}")
-            print(f"Keypoints: {keypoints.shape if keypoints is not None else 0}")
-            logger.info(f"Detected lines: {len(lines)}")
-
-            vis = ImageVisualizer(image_cv)
-            vis.draw_keypoints(keypoints=keypoints)
-            vis.draw_lines(lines=lines)
+        if visualize:
             vis.show()
-
-            return preds
-
-        # Extract keypoints, scores, and descriptors
-        kpts = preds.get("kpts", None)
-        scores = preds.get("scores", None)
-        descs = preds.get("desc", None)
-
-        logger.info(f"Keypoints: {kpts.shape if kpts is not None else 0}")
-        logger.info(f"Descriptors: {descs.shape if descs is not None else 0}")
-
-        # Visualize keypoints
-        vis = ImageVisualizer()
-        vis.draw_keypoints(keypoints=kpts, scores=scores, image=image_cv)
-        vis.show()
 
         return preds
 
