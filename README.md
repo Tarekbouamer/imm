@@ -12,10 +12,7 @@
 - [Prerequisites](#prerequisites)
 - [Installation 🖥️](#installation-️)
 - [Running with Docker 🐳](#running-with-docker-)
-- [Supported Algorithms](#supported-algorithms)
-  - [Extractors](#supported-extractors)
-  - [Matchers](#supported-matchers)
-  - [Estimators](#supported-estimators)
+- [Model Zoo](Model_Zoo.md)
 - [Usage](#usage)
   - [Feature Extraction](#feature-extraction)
   - [Feature Matching](#feature-matching)
@@ -76,42 +73,7 @@ docker run -it --gpus all imm:latest
 
 ## Supported Algorithms
 
-ImMatch supports a wide range of feature extractors, matchers, and geometric estimators. Here's an overview:
-
-### Supported Extractors
-
-| Extractor      |
-|----------------|
-| Caps           |
-| D2-Net         |
-| DISK           |
-| R2D2           |
-| Superpoint     |
-| XFeat          |
-
-### Supported Matchers
-
-| Matcher      |
-|--------------|
-| Aspanformer  |
-| DKM          |
-| Lightglue    |
-| Lighterglue  |
-| LoFTR        |
-| NN           |  
-| Superglue    |
-
-(For more visualization on the supported algorithms, check out the [Gallery](Gallery.md).)
-
-### Supported Estimators
-
-| Estimator          | PoseLib          | PyColmap         | OpenCV           |
-|--------------------|:----------------:|:----------------:|:----------------:|
-| Fundamental Matrix |                  |                  |                  |
-| Essential Matrix   |                  |                  |                  |
-| Relative Pose      |:white_check_mark:|:white_check_mark:|:white_check_mark:|
-| Homography         |:white_check_mark:|:white_check_mark:|:white_check_mark:|
-| PnP                |:white_check_mark:|:white_check_mark:|:white_check_mark:|
+Check out the full list of supported feature extractors, matchers, and geometric estimators in the [Model Zoo](Model_Zoo.md).
 
 ## Usage
 
