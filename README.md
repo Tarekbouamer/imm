@@ -38,21 +38,21 @@ git clone https://github.com/Tarekbouamer/imm.git
 cd imm
 ```
 
-2. Set Up a Conda Environment
+1. Set Up a Conda Environment
 
 ```bash
 conda create -n imm python=3.8 -y
 conda activate imm
 ```
 
-3. Install Dependencies
+1. Install Dependencies
 
 ```bash
 python -m pip install --upgrade pip
 pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118
 ```
 
-4. Install ImMatch
+1. Install ImMatch
 
 ```bash
 pip install .[optional]
@@ -68,11 +68,24 @@ For those who prefer using Docker, we provide a Dockerfile to set up ImMatch in 
 docker build -t imm:latest .
 ```
 
-2. Run the Docker container:
+1. Run the Docker container:
 
 ```bash
 docker run -it --gpus all imm:latest
 ```
+
+## Troubleshooting
+
+### `imm-gui`: matplotlib `undefined symbol: FT_Load_Glyph`
+
+This usually means matplotlib was built against a different FreeType than the one loaded at runtime. In a conda environment, reinstall FreeType and matplotlib from the same channel:
+
+```bash
+conda activate forge   # or your env name
+conda install -c conda-forge freetype matplotlib --force-reinstall
+```
+
+Then run `imm-gui` again.
 
 ## Supported Algorithms
 

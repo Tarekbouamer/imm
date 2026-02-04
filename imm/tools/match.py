@@ -17,7 +17,6 @@ from imm.settings import img1_path as default_img1_path
 from imm.utils.dataset import FeaturesPairsDataset, ImagePairsDataset
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
-from imm.utils.viz2d import MatchVisualizer
 from imm.utils.warnings import suppress_warnings
 from imm.utils.writers import AsycMatchesWriter, MatchesWriter
 
@@ -284,7 +283,9 @@ def match_images(
 
     matches = matcher.match_images(image0, image1, match_thd=match_thd)
 
-    # Visualize matches
+    # Visualize matches (lazy import so imm-gui can start without matplotlib)
+    from imm.utils.viz2d import MatchVisualizer
+
     visualizer = MatchVisualizer()
     visualizer.draw_matches(image0_cv, image1_cv, **matches, title="Matches", show_image=visualize)
 

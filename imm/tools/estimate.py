@@ -15,7 +15,6 @@ from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
 from imm.tools.match import Matching, load_and_process_image
 from imm.utils.device import detect_device
-from imm.utils.viz2d import MatchVisualizer
 from imm.utils.warnings import suppress_warnings
 
 # Suppress warnings
@@ -98,10 +97,11 @@ def homography(
         matches = m_preds["matches"][m_valid][inliers]
         mscores = m_preds["mscores"][m_valid][inliers]
 
-        # Visualize the matches
+        # Visualize the matches (lazy import so imm-gui / estimate without --visualize skip matplotlib)
         if visualize:
-            vis = MatchVisualizer()
+            from imm.utils.viz2d import MatchVisualizer
 
+            vis = MatchVisualizer()
             vis.draw_matches(
                 image0_cv,
                 image1_cv,
@@ -294,11 +294,12 @@ def fundamental(
         matches = m_preds["matches"][m_valid][inliers]
         mscores = m_preds["mscores"][m_valid][inliers]
 
-        # Visualize the matches
+        # Visualize the matches (lazy import so imm-gui / estimate without --visualize skip matplotlib)
         if visualize:
+            from imm.utils.viz2d import MatchVisualizer
+
             vis = MatchVisualizer()
 
-            # draw inlier matches
             vis.draw_matches(
                 image0_cv,
                 image1_cv,

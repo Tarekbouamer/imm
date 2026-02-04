@@ -13,7 +13,6 @@ from imm.settings import img0_path
 from imm.utils.dataset import ImagesFromList
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
-from imm.utils.viz2d import KeypointVisualizer
 from imm.utils.writers import FeaturesWriter
 
 
@@ -149,7 +148,9 @@ def extract(
         logger.info(f"Keypoints: {kpts.shape if kpts is not None else 0}")
         logger.info(f"Descriptors: {descs.shape if descs is not None else 0}")
 
-        # Visualize keypoints
+        # Visualize keypoints (lazy import so imm-gui can start without matplotlib)
+        from imm.utils.viz2d import KeypointVisualizer
+
         visualizer = KeypointVisualizer()
         visualizer.draw_keypoints(image_cv, kpts, scores)
 

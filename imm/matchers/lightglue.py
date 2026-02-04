@@ -28,7 +28,7 @@ else:
 torch.backends.cudnn.deterministic = True
 
 
-@torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
+@torch.amp.custom_fwd(cast_inputs=torch.float32, device_type="cuda")
 def normalize_keypoints(kpts: torch.Tensor, size: Optional[torch.Tensor] = None) -> torch.Tensor:
     if size is None:
         size = 1 + kpts.max(-2).values - kpts.min(-2).values
