@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import cv2
 import numpy as np
@@ -15,7 +15,7 @@ INTER_MODES: dict = {
 
 
 def find_images(root: Path, output_file: Optional[Path] = None) -> List[Path]:
-    """Find images in the specified path and subdirectories"""
+    """Find images in path and subdirectories."""
 
     # Search for image files in the specified path
     image_files = [
@@ -46,9 +46,10 @@ def find_images(root: Path, output_file: Optional[Path] = None) -> List[Path]:
 
 
 def pad_image_bottom_right(img, pad_size, ret_mask=False):
-    """Pad image to padding_size with zeros"""
+    """Pad image to pad_size with zeros."""
 
-    assert isinstance(pad_size, int) and pad_size >= max(img.shape[-2:]), f"{pad_size} < {max(img.shape[-2:])}"
+    assert isinstance(pad_size, int) and pad_size >= max(
+        img.shape[-2:]), f"{pad_size} < {max(img.shape[-2:])}"
 
     # mask
     mask = None
@@ -73,7 +74,7 @@ def pad_image_bottom_right(img, pad_size, ret_mask=False):
 
 
 def get_target_wh(w, h, target=None, resize_fn=max):
-    """Get target width and height"""
+    """Calculate target width and height."""
 
     scale = target / resize_fn(h, w)
     w_new, h_new = int(round(w * scale)), int(round(h * scale))
@@ -81,7 +82,7 @@ def get_target_wh(w, h, target=None, resize_fn=max):
 
 
 def get_divisible_wh(w, h, df=None):
-    """Get divisible width and height"""
+    """Make width and height divisible by df."""
 
     if df is not None:
         w_new, h_new = map(lambda x: int(x // df * df), [w, h])
@@ -91,29 +92,31 @@ def get_divisible_wh(w, h, df=None):
     return w_new, h_new
 
 
-def read_image(path, gray=False):
-    """Read image"""
+def read_image(image: Union[np.ndarray, str, Path], gray: bool = False):
+    """Read image from path or validate array, return RGB image with size."""
+    # read image
+    if isinstance(image, (str, Path)):
+        image = cv2.imread(str(image))
+        if image is None:
+            raise ValueError(f"Failed to load image from path: {image}")
+    elif not isinstance(image, np.ndarray):
+        raise ValueError("Input should be a file path or a numpy.ndarray")
 
-    # try to read image
-    try:
-        image = cv2.imread(path)
-    except Exception:
-        raise ValueError(f"Can't read image from {path}")
-
-    # convert to gray
+    # Convert color
     if gray:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    # get size
+    # size
     size = (image.shape[1], image.shape[0])
-
     return image, size
 
 
 def load_image(
     image_path, resize=None, resize_fn="max", gray=False, df=1, padding=False, interp=cv2.INTER_AREA
-):  # read image
-    # read image
+):
+    """Load and preprocess image with resizing and scale tracking."""
     cv_img, original_size = read_image(image_path, gray)
     mask = None
 
@@ -121,9 +124,11 @@ def load_image(
     if resize_fn != "None" and resize is not None:
         # max
         if resize_fn == "max":
-            w_new, h_new = get_target_wh(original_size[0], original_size[1], resize, resize_fn=max)
+            w_new, h_new = get_target_wh(
+                original_size[0], original_size[1], resize, resize_fn=max)
         elif resize_fn == "min":
-            w_new, h_new = get_target_wh(original_size[0], original_size[1], resize, resize_fn=min)
+            w_new, h_new = get_target_wh(
+                original_size[0], original_size[1], resize, resize_fn=min)
         else:
             w_new, h_new = resize
     else:
@@ -137,7 +142,8 @@ def load_image(
         cv_img = cv2.resize(cv_img, (w_new, h_new), interpolation=interp)
 
     # scale
-    scale = np.array([original_size[0] / w_new, original_size[1] / h_new], dtype=np.float32)
+    scale = np.array(
+        [original_size[0] / w_new, original_size[1] / h_new], dtype=np.float32)
 
     return cv_img, mask, scale, original_size
 

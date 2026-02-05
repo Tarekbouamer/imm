@@ -3,13 +3,13 @@ from typing import Dict, List
 import torch
 import torch.nn.functional as functional
 
-from imm.base import FeatureModel, tfn_image_net
+from imm.models import FeatureModel, tfn_image_net
 from imm.extractors.modules.r2d2net_modules import (
     Fast_Quad_L2Net_ConfCFS,
     NonMaxSuppression,
     Quad_L2Net_ConfCFS,
 )
-from imm.misc import _cfg
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import EXTRACTORS_REGISTRY
@@ -88,35 +88,35 @@ class R2d2Net(FeatureModel):
 
 
 default_cfgs = {
-    "r2d2_WASF_N16": _cfg(
+    "r2d2_WASF_N16": merge_config(
         drive="https://drive.google.com/uc?id=1yHiLse1yopT7Ylsx6iVZ3M-_WRaKssp9",
         max_keypoints=5000,
         reliability_threshold=0.7,
         repetability_threshold=0.7,
         descriptor_dim=128,
     ),
-    "r2d2_WASF_N8_big": _cfg(
+    "r2d2_WASF_N8_big": merge_config(
         drive="https://drive.google.com/uc?id=1qUtQMZPU8x4Kv0jwbm22bEK6tNvO7qPi",
         max_keypoints=5000,
         reliability_threshold=0.7,
         repetability_threshold=0.7,
         descriptor_dim=128,
     ),
-    "r2d2_WAF_N16": _cfg(
+    "r2d2_WAF_N16": merge_config(
         drive="https://drive.google.com/uc?id=1SPPnagMOXv0aFEBUAhlY42WFZ2C6ArFg",
         max_keypoints=5000,
         reliability_threshold=0.7,
         repetability_threshold=0.7,
         descriptor_dim=128,
     ),
-    "faster2d2_WASF_N16": _cfg(
+    "faster2d2_WASF_N16": merge_config(
         drive="https://drive.google.com/uc?id=1glXoORF9-7N6zR4-fFengt_J1lMyQaZV",
         max_keypoints=5000,
         reliability_threshold=0.7,
         repetability_threshold=0.7,
         descriptor_dim=128,
     ),
-    "faster2d2_WASF_N8_big": _cfg(
+    "faster2d2_WASF_N8_big": merge_config(
         drive="https://drive.google.com/uc?id=1gvRap5g0ORnk9s4YCR7md-qs2JMeMGqn",
         max_keypoints=5000,
         reliability_threshold=0.7,
@@ -144,7 +144,8 @@ def _make_model(name, cfg=None, pretrained=True, **kwargs):
         net = Fast_Quad_L2Net_ConfCFS(mchan=6)
 
     if pretrained:
-        load_model_weights(net, name, cfg, state_key="state_dict", replace=("module.", ""))
+        load_model_weights(
+            net, name, cfg, state_key="state_dict", replace=("module.", ""))
 
     return R2d2Net(net, cfg)
 

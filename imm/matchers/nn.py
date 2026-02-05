@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as functional
 
-from imm.base import MatcherModel
-from imm.misc import _cfg
+from imm.models import MatcherModel
+from imm.utils.config import merge_config
 
 from ._helper import MATCHERS_REGISTRY
 
@@ -54,7 +54,8 @@ class MutualNearestNeighbor(MatcherModel):
         desc0 = data["desc0"][0]
         desc1 = data["desc1"][0]
 
-        assert desc0.shape[1] != 0 and desc1.shape[1] != 0, f"desc0: {desc0.shape}, desc1: {desc1.shape}"
+        assert desc0.shape[1] != 0 and desc1.shape[
+            1] != 0, f"desc0: {desc0.shape}, desc1: {desc1.shape}"
         assert desc0.shape[0] == desc1.shape[0], f"desc0: {desc0.shape}, desc1: {desc1.shape}"
 
         # normalize
@@ -81,7 +82,8 @@ class MutualNearestNeighbor(MatcherModel):
             mask = mask & (nn_dist <= self.cfg.match_threshold)
 
         matches = torch.where(mask, nn_idx_01, nn_idx_01.new_tensor(-1))
-        scores = torch.where(mask, (nn_dist + 1) / 2.0, nn_dist.new_tensor(0.0))
+        scores = torch.where(mask, (nn_dist + 1) / 2.0,
+                             nn_dist.new_tensor(0.0))
 
         #
         out = {"matches": matches.unsqueeze(0), "mscores": scores.unsqueeze(0)}
@@ -89,7 +91,7 @@ class MutualNearestNeighbor(MatcherModel):
         return out
 
 
-default_cfgs = {"nn": _cfg(match_threshold=0.4)}
+default_cfgs = {"nn": merge_config(match_threshold=0.4)}
 
 
 def _make_model(

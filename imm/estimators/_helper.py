@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from loguru import logger
 
 try:
@@ -34,3 +35,6 @@ def get_backend():
         return "pycolmap"
     else:
         raise ValueError("No backend found for homography estimation.")
+=======
+from imm.geometry import Camera
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)

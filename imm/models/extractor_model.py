@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 
 import torch
 
-from .model_base import ModelBase
+from .base_model import ModelBase
 
 
 class FeatureModel(ModelBase):
@@ -84,7 +84,8 @@ class FeatureModel(ModelBase):
         Returns:
             Dict[str, torch.Tensor]: Extracted features dictionary.
         """
-        raise NotImplementedError("forward method must be implemented in subclass")
+        raise NotImplementedError(
+            "forward method must be implemented in subclass")
 
     def __repr__(self) -> str:
         """

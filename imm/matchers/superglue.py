@@ -5,8 +5,8 @@ import torch
 from omegaconf import DictConfig
 from torch import nn
 
-from imm.base import MatcherModel
-from imm.misc import _cfg
+from imm.models import MatcherModel
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import MATCHERS_REGISTRY
@@ -17,7 +17,8 @@ def MLP(channels: List[int], do_bn: bool = True) -> nn.Module:
     n = len(channels)
     layers = []
     for i in range(1, n):
-        layers.append(nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
+        layers.append(
+            nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
         if i < (n - 1):
             if do_bn:
                 layers.append(nn.BatchNorm1d(channels[i]))
@@ -95,7 +96,8 @@ class AttentionalPropagation(nn.Module):
 class AttentionalGNN(nn.Module):
     def __init__(self, feature_dim: int, layer_names: List[str]) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([AttentionalPropagation(feature_dim, 4) for _ in range(len(layer_names))])
+        self.layers = nn.ModuleList([AttentionalPropagation(
+            feature_dim, 4) for _ in range(len(layer_names))])
         self.names = layer_names
 
     def forward(self, desc0: torch.Tensor, desc1: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -128,7 +130,8 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     bins1 = alpha.expand(b, 1, n)
     alpha = alpha.expand(b, 1, 1)
 
-    couplings = torch.cat([torch.cat([scores, bins0], -1), torch.cat([bins1, alpha], -1)], 1)
+    couplings = torch.cat(
+        [torch.cat([scores, bins0], -1), torch.cat([bins1, alpha], -1)], 1)
 
     norm = -(ms + ns).log()
     log_mu = torch.cat([norm.expand(m), ns.log()[None] + norm])
@@ -160,7 +163,8 @@ class SuperGlue(MatcherModel):
     def __init__(self, cfg: Union[Dict[str, Any], DictConfig] = {}):
         super().__init__(cfg)
 
-        self.kenc = KeypointEncoder(self.cfg["descriptor_dim"], self.cfg["keypoint_encoder"])
+        self.kenc = KeypointEncoder(
+            self.cfg["descriptor_dim"], self.cfg["keypoint_encoder"])
 
         self.gnn = AttentionalGNN(
             feature_dim=self.cfg["descriptor_dim"],
@@ -253,13 +257,16 @@ class SuperGlue(MatcherModel):
         scores = scores / self.cfg["descriptor_dim"] ** 0.5
 
         # Run the optimal transport.
-        scores = log_optimal_transport(scores, self.bin_score, iters=self.cfg["sinkhorn_iterations"])
+        scores = log_optimal_transport(
+            scores, self.bin_score, iters=self.cfg["sinkhorn_iterations"])
 
         # Get the matches with score above "match_threshold".
         max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
         indices0, indices1 = max0.indices, max1.indices
-        mutual0 = arange_like(indices0, 1)[None] == indices1.gather(1, indices0)
-        mutual1 = arange_like(indices1, 1)[None] == indices0.gather(1, indices1)
+        mutual0 = arange_like(indices0, 1)[
+            None] == indices1.gather(1, indices0)
+        mutual1 = arange_like(indices1, 1)[
+            None] == indices0.gather(1, indices1)
         zero = scores.new_tensor(0)
         mscores0 = torch.where(mutual0, max0.values.exp(), zero)
         mscores1 = torch.where(mutual1, mscores0.gather(1, indices1), zero)  # noqa: F841
@@ -273,7 +280,7 @@ class SuperGlue(MatcherModel):
 
 
 default_cfgs = {
-    "superglue_indoor": _cfg(
+    "superglue_indoor": merge_config(
         drive="https://drive.google.com/uc?id=1kuo7a0qYvx28Rjor0-BWVTB6t8FWToGT",
         descriptor_dim=256,
         weights="indoor",
@@ -282,7 +289,7 @@ default_cfgs = {
         sinkhorn_iterations=20,
         match_threshold=0.2,
     ),
-    "superglue_outdoor": _cfg(
+    "superglue_outdoor": merge_config(
         drive="https://drive.google.com/uc?id=1nNRn-V0oa66EEgYFqrOdrQOiYTShxtMC",
         descriptor_dim=256,
         weights="outdoor",

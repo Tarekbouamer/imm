@@ -329,7 +329,48 @@ class PnPEstimator(Estimator):
                 - inliers (Optional[int]): Number of inliers
 
         """
+<<<<<<< HEAD
         return self.estimator.estimate(pts2d, pts3d, camera, **kwargs)
+=======
+
+        #
+        pts2d = pts2d.reshape(-1, 2)
+        pts3d = pts3d.reshape(-1, 3)
+
+        # Convert camera dictionary to camera matrix
+        cam_matrix = np.array(
+            [[camera["params"][0], 0, camera["params"][2]], [
+                0, camera["params"][1], camera["params"][3]], [0, 0, 1]]
+        )
+
+        # Solve PnP
+        success, rotation, translation = cv2.solvePnP(
+            pts3d,
+            pts2d,
+            cam_matrix,
+            dist,
+        )
+
+        # Convert rotation vector to quaternion
+        rvec = rotation.ravel()
+        R = cv2.Rodrigues(rvec)[0]
+
+        # Convert rotation matrix to quaternion
+        w = np.sqrt(1.0 + R[0, 0] + R[1, 1] + R[2, 2]) / 2.0
+        w4 = 4.0 * w
+        x = (R[2, 1] - R[1, 2]) / w4
+        y = (R[0, 2] - R[2, 0]) / w4
+        z = (R[1, 0] - R[0, 1]) / w4
+        qvec = np.array([w, x, y, z])
+
+        result = {
+            "qvec": qvec,
+            "tvec": translation.ravel(),
+            "success": success,
+        }
+
+        return result
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(estimator={self.estimator})"

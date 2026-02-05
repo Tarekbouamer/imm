@@ -1,26 +1,48 @@
-# IMM (ImMatch) — Copilot Instructions
+# Copilot Instructions
 
-## What this repo is
-Computer vision library for image matching, feature extraction, and geometric estimation.
-Unified interfaces for extractors, matchers, estimators.
+## Project Overview
+Computer vision library for image matching, feature extraction, and geometric estimation with unified component interfaces.
 
-## Architecture (must preserve)
-- Extractors: imm/extractors/
-- Matchers: imm/matchers/
-- Estimators: imm/estimators/
-- Registry pattern: imm/registry/ (decorator registration + factory creation)
+## Architecture Patterns (preserve)
 
-## Critical invariants (do not break)
-- Models register via registry decorators with default_cfg.
-- Weight loading uses factory load_model_weights(), caching to hub/.
-- Matchers must respect required_inputs:
-  - Sparse: kpts/desc pairs
-  - Dense: raw images
-- Use @torch.inference_mode() for extract/match paths.
-- Estimator outputs include success flag; callers must check it.
+**Component Organization:**
+- Feature extractors and their implementations
+- Matchers and matching strategies
+- Estimators for geometric computation
+- Base classes with consistent interfaces
+- CLI tools with consistent patterns
+- Public API with factory functions
+- Registry system for dynamic component registration
 
-## CLI entry points
-- imm-extract, imm-match, imm-estimate, imm-gui
+**Key Principles:**
+- Models register via decorators with configuration
+- Weight management includes caching and auto-download
+- Components validate required inputs before execution
+- Inference uses inference mode decorators
+- Operations return validated outputs with success indicators
 
-## Dev commands (verify before done)
-- make dev / make test / make lint / make format
+**Critical Contracts:**
+- Registry pattern: decorator registration with config dictionaries
+- Matchers respect input type contracts (sparse vs dense)
+- Estimators include success flags in outputs
+- Configuration merges: defaults → user → kwargs
+- Outputs converted to standard types (numpy arrays)
+
+## Common Patterns
+
+- Use `@REGISTRY.register()` for model registration
+- Include `default_cfg` with configuration and weight URLs
+- Validate inputs before processing
+- Use inference mode decorators for evaluation
+- Return numpy arrays from public methods
+- Add docstrings with Args/Returns/Raises sections
+- Use device-agnostic utilities for hardware abstraction
+
+## Code Style
+
+- **No module-level docstrings** - Do not add triple-quoted strings at the beginning of files
+- Keep imports at the top without any docstring before them
+- Use inline comments for file-level context if needed
+
+## Verification Commands
+Check `Makefile` or `pyproject.toml` for available dev commands (typically: test, lint, format)

@@ -1,13 +1,22 @@
 {
     "[python]": {
-        "editor.defaultFormatter": "charliermarsh.ruff"
+        "editor.defaultFormatter": "ms-python.autopep8"
     },
     "python.formatting.provider": "none",
+    "python.defaultInterpreterPath": "/home/dl/miniconda3/envs/forge/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.env.linux": {
+        "CONDA_DEFAULT_ENV": "forge"
+    },
     "editor.tabSize": 4,
     "todo-tree.general.showActivityBarBadge": true,
     "workbench.tree.indent": 15,
     "python.analysis.typeCheckingMode": "off",
+<<<<<<< HEAD
     "cSpell.enabled": true,
     "python.analysis.autoImportCompletions": true,
 
+=======
+    "cSpell.enabled": false,
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 }

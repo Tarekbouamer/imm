@@ -3,8 +3,8 @@ from typing import Any, Dict
 import torch
 import torch.nn.functional as F
 
-from imm.base import FeatureModel
-from imm.misc import _cfg
+from imm.models import FeatureModel
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import EXTRACTORS_REGISTRY
@@ -66,7 +66,7 @@ class DISK(FeatureModel):
             features = self.extract_features(data)
 
         assert features.shape[1] == self.desc_dim + 1
-        heatmap = features[:, self.desc_dim :]
+        heatmap = features[:, self.desc_dim:]
 
         _keypoints = self.detector.nms(heatmap)
 
@@ -76,7 +76,8 @@ class DISK(FeatureModel):
 
         # valid
         orig_w, orig_h = self.ori_size
-        valid = torch.all(keypoints <= keypoints.new_tensor([orig_w, orig_h]) - 1, 1)
+        valid = torch.all(keypoints <= keypoints.new_tensor(
+            [orig_w, orig_h]) - 1, 1)
         keypoints = keypoints[valid]
         scores = scores[valid]
 
@@ -127,14 +128,14 @@ class DISK(FeatureModel):
 
 
 default_cfgs = {
-    "disk_depth": _cfg(
+    "disk_depth": merge_config(
         drive="https://drive.google.com/uc?id=1SMNY0swehee2I9TNkvp2VMCJm0BTsRH5",
         kernel_size=5,
         window=8,
         max_keypoints=-1,
         descriptor_dim=128,
     ),
-    "disk_epipolar": _cfg(
+    "disk_epipolar": merge_config(
         drive="https://drive.google.com/uc?id=1hldj_irmF2BXI_AzUktKM3Qg57TjIdyv",
         kernel_size=5,
         window=8,

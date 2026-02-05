@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Union
 import torch
 from omegaconf import DictConfig, OmegaConf
 
-from .model_base import ModelBase
+from .base_model import ModelBase
 
 
 # enum matcher to sparse and dense matchers
@@ -53,7 +53,8 @@ class MatcherModel(ModelBase):
         Raises:
             NotImplementedError: If not implemented in the subclass.
         """
-        raise NotImplementedError("transform_inputs method must be implemented in subclass")
+        raise NotImplementedError(
+            "transform_inputs method must be implemented in subclass")
 
     def process_matches(self, data: Dict[str, Any], preds: torch.Tensor) -> Dict[str, Any]:
         """
@@ -72,13 +73,15 @@ class MatcherModel(ModelBase):
         Raises:
             NotImplementedError: If not implemented in the subclass.
         """
-        raise NotImplementedError("process_matches method must be implemented in subclass")
+        raise NotImplementedError(
+            "process_matches method must be implemented in subclass")
 
     @torch.no_grad()
     def match(
         self,
         data: Dict[str, Any],
-        process_fn: Callable[[Dict[str, Any], torch.Tensor], Dict[str, Any]] = None,
+        process_fn: Callable[[Dict[str, Any],
+                              torch.Tensor], Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Perform matching operation in evaluation mode and process matches.
@@ -131,7 +134,8 @@ class MatcherModel(ModelBase):
         Raises:
             NotImplementedError: If not implemented in the subclass.
         """
-        raise NotImplementedError("forward method must be implemented in subclass")
+        raise NotImplementedError(
+            "forward method must be implemented in subclass")
 
     def __repr__(self) -> str:
         """

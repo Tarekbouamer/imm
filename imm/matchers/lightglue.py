@@ -8,8 +8,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from imm.base import MatcherModel
-from imm.misc import _cfg
+from imm.models import MatcherModel
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import MATCHERS_REGISTRY
@@ -119,7 +119,8 @@ class Attention(nn.Module):
             # use torch 2.0 scaled_dot_product_attention with flash
             if self.has_sdp:
                 args = [x.half().contiguous() for x in [q, k, v]]
-                v = F.scaled_dot_product_attention(*args, attn_mask=mask).to(q.dtype)
+                v = F.scaled_dot_product_attention(
+                    *args, attn_mask=mask).to(q.dtype)
                 return v if mask is None else v.nan_to_num()
             else:
                 assert mask is None
@@ -236,10 +237,12 @@ class CrossBlock(nn.Module):
             attn01 = F.softmax(sim, dim=-1)
             attn10 = F.softmax(sim.transpose(-2, -1).contiguous(), dim=-1)
             m0 = torch.einsum("bhij, bhjd -> bhid", attn01, v1)
-            m1 = torch.einsum("bhji, bhjd -> bhid", attn10.transpose(-2, -1), v0)
+            m1 = torch.einsum("bhji, bhjd -> bhid",
+                              attn10.transpose(-2, -1), v0)
             if mask is not None:
                 m0, m1 = m0.nan_to_num(), m1.nan_to_num()
-        m0, m1 = self.map_(lambda t: t.transpose(1, 2).flatten(start_dim=-2), m0, m1)
+        m0, m1 = self.map_(lambda t: t.transpose(
+            1, 2).flatten(start_dim=-2), m0, m1)
         m0, m1 = self.map_(self.to_out, m0, m1)
         x0 = x0 + self.ffn(torch.cat([x0, m0], -1))
         x1 = x1 + self.ffn(torch.cat([x1, m1], -1))
@@ -283,7 +286,8 @@ def sigmoid_log_double_softmax(sim: torch.Tensor, z0: torch.Tensor, z1: torch.Te
     b, m, n = sim.shape
     certainties = F.logsigmoid(z0) + F.logsigmoid(z1).transpose(1, 2)
     scores0 = F.log_softmax(sim, 2)
-    scores1 = F.log_softmax(sim.transpose(-1, -2).contiguous(), 2).transpose(-1, -2)
+    scores1 = F.log_softmax(
+        sim.transpose(-1, -2).contiguous(), 2).transpose(-1, -2)
     scores = sim.new_full((b, m + 1, n + 1), 0)
     scores[:, :m, :n] = scores0 + scores1 + certainties
     scores[:, :-1, -1] = F.logsigmoid(-z0.squeeze(-1))
@@ -393,33 +397,41 @@ class LightGlue(MatcherModel):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         if features is not None:
             if features not in self.features:
-                raise ValueError(f"Unsupported features: {features} not in " f"{{{','.join(self.features)}}}")
+                raise ValueError(
+                    f"Unsupported features: {features} not in " f"{{{','.join(self.features)}}}")
             for k, v in self.features[features].items():
                 setattr(conf, k, v)
 
         if conf.input_dim != conf.descriptor_dim:
-            self.input_proj = nn.Linear(conf.input_dim, conf.descriptor_dim, bias=True)
+            self.input_proj = nn.Linear(
+                conf.input_dim, conf.descriptor_dim, bias=True)
         else:
             self.input_proj = nn.Identity()
 
         head_dim = conf.descriptor_dim // conf.num_heads
-        self.posenc = LearnableFourierPositionalEncoding(2 + 2 * self.conf.add_scale_ori, head_dim, head_dim)
+        self.posenc = LearnableFourierPositionalEncoding(
+            2 + 2 * self.conf.add_scale_ori, head_dim, head_dim)
 
         h, n, d = conf.num_heads, conf.n_layers, conf.descriptor_dim
 
-        self.transformers = nn.ModuleList([TransformerLayer(d, h, conf.flash) for _ in range(n)])
+        self.transformers = nn.ModuleList(
+            [TransformerLayer(d, h, conf.flash) for _ in range(n)])
 
-        self.log_assignment = nn.ModuleList([MatchAssignment(d) for _ in range(n)])
-        self.token_confidence = nn.ModuleList([TokenConfidence(d) for _ in range(n - 1)])
+        self.log_assignment = nn.ModuleList(
+            [MatchAssignment(d) for _ in range(n)])
+        self.token_confidence = nn.ModuleList(
+            [TokenConfidence(d) for _ in range(n - 1)])
         self.register_buffer(
             "confidence_thresholds",
-            torch.Tensor([self.confidence_threshold(i) for i in range(self.conf.n_layers)]),
+            torch.Tensor([self.confidence_threshold(i)
+                         for i in range(self.conf.n_layers)]),
         )
         # TODO: work on this part, try to get clean state_dict for strict loading.
         state_dict = None
         if features is not None:
             fname = f"{conf.weights}_{self.version.replace('.', '-')}.pth"
-            state_dict = torch.hub.load_state_dict_from_url(self.url.format(self.version, features), file_name=fname)
+            state_dict = torch.hub.load_state_dict_from_url(
+                self.url.format(self.version, features), file_name=fname)
             self.load_state_dict(state_dict, strict=False)
         elif conf.weights is not None:
             path = Path(__file__).parent
@@ -430,9 +442,11 @@ class LightGlue(MatcherModel):
             # rename old state dict entries
             for i in range(self.conf.n_layers):
                 pattern = f"self_attn.{i}", f"transformers.{i}.self_attn"
-                state_dict = {k.replace(*pattern): v for k, v in state_dict.items()}
+                state_dict = {k.replace(*pattern): v for k,
+                              v in state_dict.items()}
                 pattern = f"cross_attn.{i}", f"transformers.{i}.cross_attn"
-                state_dict = {k.replace(*pattern): v for k, v in state_dict.items()}
+                state_dict = {k.replace(*pattern): v for k,
+                              v in state_dict.items()}
             self.load_state_dict(state_dict, strict=False)
 
         # static lengths LightGlue is compiled for (only used with torch.compile)
@@ -582,7 +596,8 @@ class LightGlue(MatcherModel):
         for i in range(self.conf.n_layers):
             if desc0.shape[1] == 0 or desc1.shape[1] == 0:  # no keypoints
                 break
-            desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1, mask0=mask0, mask1=mask1)
+            desc0, desc1 = self.transformers[i](
+                desc0, desc1, encoding0, encoding1, mask0=mask0, mask1=mask1)
             if i == self.conf.n_layers - 1:
                 continue  # no early stopping or adaptive width at last layer
 
@@ -631,7 +646,8 @@ class LightGlue(MatcherModel):
 
         desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]  # remove padding
         scores, _ = self.log_assignment[i](desc0, desc1)
-        m0, m1, mscores0, mscores1 = filter_matches(scores, self.conf.filter_threshold)
+        m0, m1, mscores0, mscores1 = filter_matches(
+            scores, self.conf.filter_threshold)
         matches, mscores = [], []
         for k in range(b):
             valid = m0[k] > -1
@@ -647,8 +663,10 @@ class LightGlue(MatcherModel):
         if do_point_pruning:
             m0_ = torch.full((b, m), -1, device=m0.device, dtype=m0.dtype)
             m1_ = torch.full((b, n), -1, device=m1.device, dtype=m1.dtype)
-            m0_[:, ind0] = torch.where(m0 == -1, -1, ind1.gather(1, m0.clamp(min=0)))
-            m1_[:, ind1] = torch.where(m1 == -1, -1, ind0.gather(1, m1.clamp(min=0)))
+            m0_[:, ind0] = torch.where(
+                m0 == -1, -1, ind1.gather(1, m0.clamp(min=0)))
+            m1_[:, ind1] = torch.where(
+                m1 == -1, -1, ind0.gather(1, m1.clamp(min=0)))
             mscores0_ = torch.zeros((b, m), device=mscores0.device)
             mscores1_ = torch.zeros((b, n), device=mscores1.device)
             mscores0_[:, ind0] = mscores0
@@ -692,7 +710,8 @@ class LightGlue(MatcherModel):
         """evaluate stopping condition"""
         confidences = torch.cat([confidences0, confidences1], -1)
         threshold = self.confidence_thresholds[layer_index]
-        ratio_confident = 1.0 - (confidences < threshold).float().sum() / num_points
+        ratio_confident = 1.0 - \
+            (confidences < threshold).float().sum() / num_points
         return ratio_confident > self.conf.depth_confidence
 
     def pruning_min_kpts(self, device: torch.device):
@@ -703,20 +722,20 @@ class LightGlue(MatcherModel):
 
 
 default_cfgs = {
-    "lightglue_superpoint": _cfg(
+    "lightglue_superpoint": merge_config(
         url="https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/superpoint_lightglue.pth",
         features="superpoint",
         match_threshold=0.1,
     ),
-    "lightglue_disk": _cfg(
+    "lightglue_disk": merge_config(
         url="https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/disk_lightglue.pth",
         features="disk",
     ),
-    "lightglue_aliked": _cfg(
+    "lightglue_aliked": merge_config(
         url="https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/aliked_lightglue.pth",
         features="aliked",
     ),
-    "lightglue_sift": _cfg(
+    "lightglue_sift": merge_config(
         url="https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/sift_lightglue.pth",
         features="sift",
     ),

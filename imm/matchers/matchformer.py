@@ -4,9 +4,9 @@ import torch
 import torchvision.transforms as tfn
 from einops.einops import rearrange
 
-from imm.base.matcher import MatcherModel
+from imm.models import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY
-from imm.misc import _cfg
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from .efficient_loftr import resize_to_divisible
@@ -77,8 +77,10 @@ class MatchFormer(MatcherModel):
         image0 = tfn.Resize([Hs, Ws], antialias=True)(image0)
         image1 = tfn.Resize([Hs, Ws], antialias=True)(image1)
 
-        scale00 = torch.tensor([data["image0"].shape[2] / Ws, data["image0"].shape[1] / Hs]).to(image0.device)
-        scale11 = torch.tensor([data["image1"].shape[2] / Ws, data["image1"].shape[1] / Hs]).to(image1.device)
+        scale00 = torch.tensor(
+            [data["image0"].shape[2] / Ws, data["image0"].shape[1] / Hs]).to(image0.device)
+        scale11 = torch.tensor(
+            [data["image1"].shape[2] / Ws, data["image1"].shape[1] / Hs]).to(image1.device)
 
         # add batch dim
         if image0.dim() == 3:
@@ -119,17 +121,22 @@ class MatchFormer(MatcherModel):
 
         #
         out_data = {}
-        out_data.update({"bs": image0.size(0), "hw0_i": image0.shape[2:], "hw1_i": image1.shape[2:]})
+        out_data.update(
+            {"bs": image0.size(0), "hw0_i": image0.shape[2:], "hw1_i": image1.shape[2:]})
 
         mask_c0 = mask_c1 = None  # mask is useful in training
         if "mask0" in data:
-            mask_c0, mask_c1 = data["mask0"].flatten(-2), data["mask1"].flatten(-2)
+            mask_c0, mask_c1 = data["mask0"].flatten(
+                -2), data["mask1"].flatten(-2)
 
         if out_data["hw0_i"] == out_data["hw1_i"]:
-            feats_c, feats_f = self.backbone(torch.cat([image0, image1], dim=0))
-            (feat_c0, feat_c1), (feat_f0, feat_f1) = feats_c.split(out_data["bs"]), feats_f.split(out_data["bs"])
+            feats_c, feats_f = self.backbone(
+                torch.cat([image0, image1], dim=0))
+            (feat_c0, feat_c1), (feat_f0, feat_f1) = feats_c.split(
+                out_data["bs"]), feats_f.split(out_data["bs"])
         else:
-            (feat_c0, feat_f0), (feat_c1, feat_f1) = self.backbone(image0), self.backbone(image1)
+            (feat_c0, feat_f0), (feat_c1, feat_f1) = self.backbone(
+                image0), self.backbone(image1)
 
         out_data.update(
             {
@@ -144,10 +151,12 @@ class MatchFormer(MatcherModel):
         feat_c1 = rearrange(feat_c1, "n c h w -> n (h w) c")
 
         # match coarse-level
-        self.coarse_matching(feat_c0, feat_c1, out_data, mask_c0=mask_c0, mask_c1=mask_c1)
+        self.coarse_matching(feat_c0, feat_c1, out_data,
+                             mask_c0=mask_c0, mask_c1=mask_c1)
 
         # fine-level refinement
-        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, out_data)
+        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(
+            feat_f0, feat_f1, feat_c0, feat_c1, out_data)
 
         # match fine-level
         self.fine_matching(feat_f0_unfold, feat_f1_unfold, out_data)
@@ -175,7 +184,7 @@ class MatchFormer(MatcherModel):
 
 
 default_cfgs = {
-    "matchformer_largesea": _cfg(
+    "matchformer_largesea": merge_config(
         cfg_base=_config,
         drive="https://drive.google.com/uc?id=1EjeSvU3ARZg5mn2PlqNDWMu9iwS7Zf_m",
         backbone_type="largesea",
@@ -186,7 +195,7 @@ default_cfgs = {
             "d_ffn": 256,
         },
     ),
-    "matchformer_litela": _cfg(
+    "matchformer_litela": merge_config(
         cfg_base=_config,
         drive="https://drive.google.com/uc?id=11ClOQ_VrlsT7PxK6jQr5AW1Fd0YMbB3R",
         backbone_type="litela",
@@ -197,7 +206,7 @@ default_cfgs = {
             "d_ffn": 192,
         },
     ),
-    "matchformer_largela": _cfg(
+    "matchformer_largela": merge_config(
         cfg_base=_config,
         drive="https://drive.google.com/uc?id=1Ii-z3dwNwGaxoeFVSE44DqHdMhubYbQf",
         backbone_type="largela",
@@ -208,7 +217,7 @@ default_cfgs = {
             "d_ffn": 256,
         },
     ),
-    "matchformer_litesea": _cfg(
+    "matchformer_litesea": merge_config(
         cfg_base=_config,
         drive="https://drive.google.com/uc?id=1etaU9mM8bGT2AKT56ph6iqUdpV1daFBz",
         backbone_type="litesea",

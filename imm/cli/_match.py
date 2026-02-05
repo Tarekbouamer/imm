@@ -1,4 +1,6 @@
+import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -11,14 +13,15 @@ from tqdm import tqdm
 
 from imm.extractors._helper import create_extractor
 from imm.matchers._helper import create_matcher
-from imm.misc import extend_keys_with_suffix
+from imm.utils.data import extend_keys_with_suffix
 from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
-from imm.utils.dataset import FeaturesPairsDataset, ImagePairsDataset
+from imm.data import FeaturesPairsDataset, ImagePairsDataset
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
 from imm.utils.warnings import suppress_warnings
-from imm.utils.writers import AsycMatchesWriter, MatchesWriter
+from imm.writers import AsycMatchesWriter, MatchesWriter
+from imm.utils import create_matching_manifest, save_manifest
 
 
 def path2key(name: str) -> str:
@@ -33,11 +36,11 @@ def pairs2key(name0: str, name1: str) -> str:
 
 
 def load_and_process_image(
-    image_path: str, max_img_size: Optional[int], device: torch.device
+    image_path: str, resize: Optional[int], device: torch.device
 ) -> Tuple[torch.Tensor, np.ndarray]:
     """Load and process an image."""
     logger.info(f"Loading image: {image_path}")
-    data = load_image_tensor(image_path, resize=max_img_size)
+    data = load_image_tensor(image_path, resize=resize)
     return data[0].to(device), data[1]
 
 
@@ -55,7 +58,8 @@ class Matching:
         Initializes the Matching class and the matcher model. Sets up the extractor if needed.
         """
         self.device = device if device else detect_device()
-        self.matcher = create_matcher(name=matcher_name, cfg={"match_threshold": match_thd}, **kwargs)
+        self.matcher = create_matcher(name=matcher_name, cfg={
+                                      "match_threshold": match_thd}, **kwargs)
         self.matcher.to(self.device)
         self.matcher.eval()
         logger.info(f"Initialized {matcher_name} matcher on {self.device}")
@@ -65,7 +69,8 @@ class Matching:
             self.set_extractor(extractor_name, max_keypoints)
 
     def set_extractor(self, extractor_name: str, max_keypoints: int) -> None:
-        self.extractor = create_extractor(extractor_name, cfg={"max_keypoints": max_keypoints})
+        self.extractor = create_extractor(
+            extractor_name, cfg={"max_keypoints": max_keypoints})
         self.extractor.eval().to(self.device)
         logger.info(f"Initialized {extractor_name} extractor on {self.device}")
 
@@ -116,7 +121,8 @@ class Matching:
         else:
             features0 = self.extract_features(image0, "0")
             features1 = self.extract_features(image1, "1")
-            logger.info(f"Matching img0: {len(features0['kpts0'][0])}, img1: {len(features1['kpts1'][0])}")
+            logger.info(
+                f"Matching img0: {len(features0['kpts0'][0])}, img1: {len(features1['kpts1'][0])}")
             data = {**features0, **features1}
             preds = self.match_features(data)
             return self.filter_matches(preds, match_thd)
@@ -152,10 +158,19 @@ class Matching:
         match_thd: float = 0.0,
     ) -> None:
         """Processes a dataset of image pairs and saves matching results."""
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=True if self.device == "cuda" else False,
+            prefetch_factor=2 if num_workers > 0 else None,
+            persistent_workers=True if num_workers > 0 else False,
+        )
         writer = MatchesWriter(save_path)
+        manifest_path = save_path.parent / f"{save_path.stem}_manifest.json"
 
         start_time = time.time()
+        processed_pairs = []
 
         for idx, data in enumerate(tqdm(dataloader, desc="Matching images".rjust(15), colour="green")):
             name0, name1 = data["name0"][0], data["name1"][0]
@@ -167,6 +182,7 @@ class Matching:
 
             # Write matches and stats to file
             writer.write_matches(pair_key, preds)
+            processed_pairs.append({"image0": name0, "image1": name1})
 
             # Compute statistics
             if (idx + 1) % print_freq == 0:
@@ -174,8 +190,25 @@ class Matching:
 
         writer.close()
         total_time = time.time() - start_time
+
+        # Save manifest
+        manifest = {
+            "matcher": self.matcher.__class__.__name__,
+            "extractor": self.extractor.__class__.__name__ if self.extractor else None,
+            "device": self.device,
+            "timestamp": datetime.now().isoformat(),
+            "total_pairs": len(processed_pairs),
+            "total_time_seconds": round(total_time, 2),
+            "pairs": processed_pairs,
+        }
+
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+
         logger.info(f"Matches saved to {save_path}")
-        logger.info(f"Total processing time for image pairs: {total_time:.2f} seconds")
+        logger.info(f"Manifest saved to {manifest_path}")
+        logger.info(
+            f"Total processing time for image pairs: {total_time:.2f} seconds")
 
     @torch.inference_mode()
     def match_sequence_features(
@@ -189,13 +222,25 @@ class Matching:
         match_thd: float = 0.0,
     ) -> None:
         """Processes a dataset of pre-extracted feature pairs and saves matching results."""
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False, pin_memory=True)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            shuffle=False,
+            pin_memory=True,
+            prefetch_factor=2 if num_workers > 0 else None,
+            persistent_workers=True if num_workers > 0 else False,
+        )
         writer = AsycMatchesWriter(save_path, num_workers=num_workers)
+        manifest_path = save_path.parent / f"{save_path.stem}_manifest.json"
 
         if match_thd > 0:
-            raise NotImplementedError("Filtering matches based on threshold is not implemented yet")
+            raise NotImplementedError(
+                "Filtering matches based on threshold is not implemented yet")
 
         start_time = time.time()
+        processed_pairs = []
+
         for idx, data in enumerate(tqdm(dataloader, desc="Matching features".rjust(15), colour="green")):
             name0, name1 = data["name0"][0], data["name1"][0]
 
@@ -208,6 +253,7 @@ class Matching:
 
             # Write matches and stats to file
             writer.write_matches(pair_key, wpreds)
+            processed_pairs.append({"image0": name0, "image1": name1})
 
             # Compute statistics
             if (idx + 1) % print_freq == 0:
@@ -215,8 +261,24 @@ class Matching:
 
         writer.close()
         total_time = time.time() - start_time
+
+        # Save manifest
+        manifest = {
+            "matcher": self.matcher.__class__.__name__,
+            "device": self.device,
+            "timestamp": datetime.now().isoformat(),
+            "total_pairs": len(processed_pairs),
+            "total_time_seconds": round(total_time, 2),
+            "pairs": processed_pairs,
+        }
+
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+
         logger.info(f"Matches saved to {save_path}")
-        logger.info(f"Total processing time for feature pairs: {total_time:.2f} seconds")
+        logger.info(f"Manifest saved to {manifest_path}")
+        logger.info(
+            f"Total processing time for feature pairs: {total_time:.2f} seconds")
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(matcher={self.matcher}, extractor={self.extractor}, device={self.device})"
@@ -228,11 +290,12 @@ class Matching:
 @click.option("--matcher", default="superglue_outdoor", help="Matcher name")
 @click.option("--extractor", default="superpoint", help="Extractor name")
 @click.option("--max_keypoints", default=-1, help="Maximum number of keypoints", type=int)
-@click.option("--max_img_size", default=None, type=int, help="Max image size")
 @click.option("--match_thd", default=0.0, help="Matching score threshold")
-@click.option("--visualize", is_flag=True, help="Enable visualization")
+@click.option("--resize", default=640, type=int, help="Resize to max dimension")
+@click.option("--output", default=None, help="Output path for visualization")
+@click.option("--visualize", "--viz", is_flag=True, help="Enable visualization")
 @click.option("--force_cpu", is_flag=False, help="Force the use of CPU instead of GPU")
-@click.option("--save_path", default=None, help="Output directory ")
+@click.help_option("--help", "-h")
 @suppress_warnings()
 def match_images(
     img0_path: str,
@@ -240,11 +303,11 @@ def match_images(
     matcher: str,
     extractor: str,
     max_keypoints: int,
-    max_img_size: int,
     match_thd: float,
+    resize: int,
+    output: str,
     visualize: bool,
     force_cpu: bool,
-    save_path: str,
 ) -> None:
     """Match a pair of images using a given matcher and extractor.
 
@@ -254,17 +317,17 @@ def match_images(
         matcher (str): Name of the matcher.
         extractor (str): Name of the extractor.
         max_keypoints (int): Maximum number of keypoints.
-        max_img_size (int): Maximum image size.
+        resize (int): Image resize as max dimension, or None for no resize.
         match_thd (float): Matching score threshold.
         visualize (bool): Enable or disable visualization.
         force_cpu (bool): Force the use of CPU instead of GPU.
-        save_path (str): Output directory.
+        output (str): Output path for visualization.
     """
 
     logger.info("Starting image matching process")
     logger.info(
         f"Matcher: {matcher}, Extractor: {extractor}, Max keypoints: {max_keypoints}",
-        f"Threshold: {match_thd}, Max size: {max_img_size}",
+        f"Threshold: {match_thd}, Max size: {resize}",
     )
 
     # Determine device
@@ -275,26 +338,29 @@ def match_images(
     img1_path = Path(img1_path)
 
     # Load and process images
-    image0, image0_cv = load_and_process_image(img0_path, max_img_size, device)
-    image1, image1_cv = load_and_process_image(img1_path, max_img_size, device)
+    image0, image0_cv = load_and_process_image(img0_path, resize, device)
+    image1, image1_cv = load_and_process_image(img1_path, resize, device)
 
     # Match images
-    matcher = Matching(matcher_name=matcher, extractor_name=extractor, max_keypoints=max_keypoints, device=device)
+    matcher = Matching(matcher_name=matcher, extractor_name=extractor,
+                       max_keypoints=max_keypoints, device=device)
 
     matches = matcher.match_images(image0, image1, match_thd=match_thd)
 
     # Visualize matches (lazy import so imm-gui can start without matplotlib)
-    from imm.utils.viz2d import MatchVisualizer
+    from imm.viz import MatchVisualizer
 
     visualizer = MatchVisualizer()
-    visualizer.draw_matches(image0_cv, image1_cv, **matches, title="Matches", show_image=visualize)
+    visualizer.draw_matches(image0_cv, image1_cv, **
+                            matches, title="Matches", show_image=visualize)
 
-    if save_path is not None:
-        save_path = Path(save_path)
-        if save_path.is_dir():
-            output_file = save_path / f"matches_{img0_path.stem}_{img1_path.stem}.png"
+    if output is not None:
+        output_path = Path(output)
+        if output_path.is_dir():
+            output_file = output_path / \
+                f"matches_{img0_path.stem}_{img1_path.stem}.png"
         else:
-            output_file = save_path
+            output_file = output_path
 
         visualizer.save(str(output_file))
         logger.info(f"Visualization saved to {output_file}")

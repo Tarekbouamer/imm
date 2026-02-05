@@ -3,9 +3,9 @@ from typing import Any, Dict
 import torch
 from torch import nn
 
-from imm.base.matcher import MatcherModel
+from imm.models import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY
-from imm.misc import _cfg
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from .lightglue import LightGlue
@@ -18,7 +18,8 @@ class LighterGlue(MatcherModel):
 
     default_conf_xfeat = {
         "name": "xfeat",  # just for interfacing
-        "input_dim": 64,  # input descriptor dimension (autoselected from weights)
+        # input descriptor dimension (autoselected from weights)
+        "input_dim": 64,
         "descriptor_dim": 96,
         "add_scale_ori": False,
         "add_laf": False,  # for KeyNetAffNetHardNet
@@ -78,7 +79,7 @@ class LighterGlue(MatcherModel):
 
 
 default_cfgs = {
-    "lighterglue": _cfg(
+    "lighterglue": merge_config(
         drive="https://drive.google.com/uc?id=1UpnI8sbG_wP8gNr4vZafU3fAwYhoaaXV",
         features="superpoint",
         match_threshold=0.1,

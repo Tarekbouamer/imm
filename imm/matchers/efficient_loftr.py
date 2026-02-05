@@ -5,9 +5,9 @@ import torchvision.transforms as tfm
 from einops.einops import rearrange
 from loguru import logger
 
-from imm.base.matcher import MatcherModel
+from imm.models import MatcherModel
 from imm.matchers._helper import MATCHERS_REGISTRY
-from imm.misc import _cfg
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from .modules.efficient_loftr_modules import (
@@ -21,7 +21,8 @@ from .modules.efficient_loftr_modules import (
 
 def detect_NaN(feat_0, feat_1):
     logger.info("NaN detected in feature")
-    logger.info(f"#NaN in feat_0: {torch.isnan(feat_0).int().sum()}, #NaN in feat_1: {torch.isnan(feat_1).int().sum()}")
+    logger.info(
+        f"#NaN in feat_0: {torch.isnan(feat_0).int().sum()}, #NaN in feat_1: {torch.isnan(feat_1).int().sum()}")
     feat_0[torch.isnan(feat_0)] = 0
     feat_1[torch.isnan(feat_1)] = 0
 
@@ -88,7 +89,8 @@ def resize_to_divisible(img: torch.Tensor, divisible_by: int = 14) -> torch.Tens
 
     divisible_h = round(h / divisible_by) * divisible_by
     divisible_w = round(w / divisible_by) * divisible_by
-    img = tfm.functional.resize(img, [divisible_h, divisible_w], antialias=True)
+    img = tfm.functional.resize(
+        img, [divisible_h, divisible_w], antialias=True)
 
     return img
 
@@ -203,7 +205,8 @@ class EfficinetLoFTR(MatcherModel):
         if "mask0" in data:
             mask_c0, mask_c1 = data["mask0"], data["mask1"]
 
-        feat_c0, feat_c1 = self.loftr_coarse(feat_c0, feat_c1, mask_c0, mask_c1)
+        feat_c0, feat_c1 = self.loftr_coarse(
+            feat_c0, feat_c1, mask_c0, mask_c1)
 
         feat_c0 = rearrange(feat_c0, "n c h w -> n (h w) c")
         feat_c1 = rearrange(feat_c1, "n c h w -> n (h w) c")
@@ -217,19 +220,24 @@ class EfficinetLoFTR(MatcherModel):
             feat_c0,
             feat_c1,
             out_data,
-            mask_c0=mask_c0.view(mask_c0.size(0), -1) if mask_c0 is not None else mask_c0,
-            mask_c1=mask_c1.view(mask_c1.size(0), -1) if mask_c1 is not None else mask_c1,
+            mask_c0=mask_c0.view(mask_c0.size(
+                0), -1) if mask_c0 is not None else mask_c0,
+            mask_c1=mask_c1.view(mask_c1.size(
+                0), -1) if mask_c1 is not None else mask_c1,
         )
 
         # prevent fp16 overflow during mixed precision training
-        feat_c0, feat_c1 = map(lambda feat: feat / feat.shape[-1] ** 0.5, [feat_c0, feat_c1])
+        feat_c0, feat_c1 = map(lambda feat: feat /
+                               feat.shape[-1] ** 0.5, [feat_c0, feat_c1])
 
         # 4. fine-level refinement
-        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_c0, feat_c1, out_data)
+        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(
+            feat_c0, feat_c1, out_data)
 
         # detect NaN during mixed precision training
         if self.cfg["replace_nan"] and (
-            torch.any(torch.isnan(feat_f0_unfold)) or torch.any(torch.isnan(feat_f1_unfold))
+            torch.any(torch.isnan(feat_f0_unfold)) or torch.any(
+                torch.isnan(feat_f1_unfold))
         ):
             detect_NaN(feat_f0_unfold, feat_f1_unfold)
 
@@ -267,7 +275,7 @@ class EfficinetLoFTR(MatcherModel):
 
 
 default_cfgs = {
-    "efficient_loftr": _cfg(
+    "efficient_loftr": merge_config(
         drive="https://drive.google.com/uc?id=1jFy2JbMKlIp82541TakhQPaoyB5qDeic",
         gray=True,
         match_threshold=0.2,
@@ -283,7 +291,8 @@ def _make_model(name, cfg=None, pretrained=True, **kwargs):
 
     # load
     if pretrained:
-        load_model_weights(model, name, cfg, state_key="state_dict", replace=("matcher.", ""))
+        load_model_weights(
+            model, name, cfg, state_key="state_dict", replace=("matcher.", ""))
 
     return model
 

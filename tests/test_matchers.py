@@ -2,7 +2,7 @@ import torch
 
 from imm.extractors._helper import create_extractor
 from imm.matchers._helper import create_matcher
-from imm.settings import MATCHERS_LIST
+from tests.conftest import MATCHERS_LIST
 from imm.utils.device import detect_device, to_numpy
 from imm.utils.io import load_image_tensor
 from imm.utils.warnings import suppress_warnings
@@ -19,7 +19,8 @@ def extract_features(extractor, image, suffix, device="cpu"):
     size = torch.tensor([h, w])
 
     # Suffix
-    preds = {f"{k}{suffix}": v for k, v in preds.items() if k in ["kpts", "desc", "scores"]}
+    preds = {f"{k}{suffix}": v for k, v in preds.items() if k in [
+        "kpts", "desc", "scores"]}
     preds[f"size{suffix}"] = size
 
     # Flatten
@@ -65,7 +66,8 @@ def validate_matches(preds):
         len(matches) == len(mscores) == len(kpts0)
     ), f"Mismatch between matches: {len(matches)}, mscores: {len(mscores)}, and kpts0: {len(kpts0)}"
 
-    assert len(mkpts0) == len(mkpts1), f"Mismatch between mkpts0: {len(mkpts0)} and mkpts1: {len(mkpts1)}"
+    assert len(mkpts0) == len(
+        mkpts1), f"Mismatch between mkpts0: {len(mkpts0)} and mkpts1: {len(mkpts1)}"
 
     for k, v in preds.items():
         print(k, v.shape)
@@ -82,14 +84,16 @@ def test_all_registered_matchers():
     print(f"Running tests for {N} matchers")
 
     for it, test_case in enumerate(MATCHERS_LIST):
-        print(f"{it+1}/{N} - Testing matcher: {test_case.matcher} with extractor: {test_case.extractor}")
+        print(
+            f"{it+1}/{N} - Testing matcher: {test_case.matcher} with extractor: {test_case.extractor}")
         try:
             # Load images
             image0 = load_image_tensor(test_case.img0, 640)[0].to(device)
             image1 = load_image_tensor(test_case.img1, 640)[0].to(device)
 
             # Match features
-            preds = match_features(test_case.matcher, test_case.extractor, image0, image1, device=device)
+            preds = match_features(
+                test_case.matcher, test_case.extractor, image0, image1, device=device)
 
             # Validate matches
             validate_matches(preds)

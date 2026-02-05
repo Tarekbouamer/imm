@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from imm.base import FeatureModel, tfn_image_net
-from imm.misc import _cfg
+from imm.models import FeatureModel, tfn_image_net
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import EXTRACTORS_REGISTRY, create_extractor
@@ -37,7 +37,8 @@ class CAPSnet(nn.Module):
         return coord_norm
 
     def sample_feat_by_coord(self, x, coord_n, norm=False):
-        feat = F.grid_sample(x, coord_n.unsqueeze(2), align_corners=True).squeeze(-1)
+        feat = F.grid_sample(x, coord_n.unsqueeze(
+            2), align_corners=True).squeeze(-1)
         if norm:
             feat = F.normalize(feat)
         feat = feat.transpose(1, 2)
@@ -84,7 +85,7 @@ class CAPS(FeatureModel):
 
 
 default_cfgs = {
-    "caps_sp": _cfg(
+    "caps_sp": merge_config(
         drive="https://drive.google.com/uc?id=1vj3q7_phDcHiwIdDYppfSfoQiPe3lnOD",
         backbone="resnet50",
         descriptor_dim=256,

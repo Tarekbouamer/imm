@@ -12,3 +12,19 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
     logger.warning("Could not import loguru")
+
+from imm.api import (
+    EXTRACTORS_REGISTRY,
+    MATCHERS_REGISTRY,
+    create_extractor,
+    create_matcher,
+    download_model_weights,
+)
+
+__all__ = [
+    "create_extractor",
+    "create_matcher",
+    "download_model_weights",
+    "EXTRACTORS_REGISTRY",
+    "MATCHERS_REGISTRY",
+]

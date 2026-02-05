@@ -13,34 +13,31 @@ def create_matcher(
     pretrained: bool = True,
     **kwargs: Any,
 ) -> Any:
-    """
-    Create a matcher model.
+    """Create a matcher model from registry.
 
     Args:
-        name (str): Name of the matcher model.
-        cfg (Optional[Dict[str, Any]], optional): Configuration for the model. Defaults to None.
-        pretrained (bool, optional): Whether to use pretrained weights. Defaults to True.
-        **kwargs: Additional keyword arguments for model creation.
+        name: Model name.
+        cfg: Configuration dict.
+        pretrained: Use pretrained weights.
+        **kwargs: Additional args for model creation.
 
     Returns:
-        Any: The created matcher model.
-
-    Raises:
-        ValueError: If the matcher is not available in the registry.
-        Exception: If there's an error during model creation.
+        Created matcher model.
     """
-    logger.info(f"Create matcher: {name}" + (f" with config: {cfg}" if cfg is not None else ""))
+    logger.info(
+        f"Create matcher: {name}" + (f" with config: {cfg}" if cfg is not None else ""))
 
     try:
         if not MATCHERS_REGISTRY.is_model(name):
             available_models = MATCHERS_REGISTRY.list_models
-            print(MATCHERS_REGISTRY)
-            raise ValueError(f"Matcher '{name}' not available. Available matchers: {available_models}")
-
-        model = MATCHERS_REGISTRY.create_model(name, cfg=cfg, pretrained=pretrained, **kwargs)
+            raise ValueError(
+                f"Matcher '{name}' is not available. Available models are: {', '.join(available_models)}"
+            )
+        model = MATCHERS_REGISTRY.create_model(
+            name, cfg=cfg, pretrained=pretrained, **kwargs)
         logger.info(f"Successfully created matcher: {name}")
         return model
 
     except Exception as e:
-        logger.error(f"Error creating matcher '{name}': {str(e)}")
+        logger.error(f"Error creating matcher '{name}': {e}")
         raise

@@ -3,7 +3,7 @@ from typing import Any, Dict
 import torch
 import torch.nn.functional as F
 
-from imm.base import FeatureModel
+from imm.models import FeatureModel
 from imm.extractors.modules.d2net_modules import (
     DenseFeatureExtractionModule,
     HandcraftedLocalizationModule,
@@ -12,7 +12,7 @@ from imm.extractors.modules.d2net_modules import (
     interpolate_dense_features,
     upscale_positions,
 )
-from imm.misc import _cfg
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import EXTRACTORS_REGISTRY
@@ -24,7 +24,8 @@ class D2Net(FeatureModel):
     def __init__(self, cfg: Dict[str, Any]) -> None:
         super().__init__(cfg)
 
-        self.dense_feature_extraction = DenseFeatureExtractionModule(use_relu=True, use_cuda=False)
+        self.dense_feature_extraction = DenseFeatureExtractionModule(
+            use_relu=True, use_cuda=False)
         self.detection = HardDetectionModule()
         self.localization = HandcraftedLocalizationModule()
 
@@ -47,12 +48,16 @@ class D2Net(FeatureModel):
         fmap_pos = torch.nonzero(detections).t()
 
         displacements = self.localization(features)[0]
-        displacements_i = displacements[0, fmap_pos[0, :], fmap_pos[1, :], fmap_pos[2, :]]
-        displacements_j = displacements[1, fmap_pos[0, :], fmap_pos[1, :], fmap_pos[2, :]]
+        displacements_i = displacements[0,
+                                        fmap_pos[0, :], fmap_pos[1, :], fmap_pos[2, :]]
+        displacements_j = displacements[1,
+                                        fmap_pos[0, :], fmap_pos[1, :], fmap_pos[2, :]]
 
-        mask = torch.min(torch.abs(displacements_i) < 0.5, torch.abs(displacements_j) < 0.5)
+        mask = torch.min(torch.abs(displacements_i) < 0.5,
+                         torch.abs(displacements_j) < 0.5)
         fmap_pos = fmap_pos[:, mask]
-        valid_displacements = torch.stack([displacements_i[mask], displacements_j[mask]], dim=0)
+        valid_displacements = torch.stack(
+            [displacements_i[mask], displacements_j[mask]], dim=0)
 
         fmap_keypoints = fmap_pos[1:, :].float() + valid_displacements
         keypoints = upscale_positions(fmap_keypoints, scaling_steps=2)
@@ -66,29 +71,31 @@ class D2Net(FeatureModel):
             scores = scores[idxs]
 
         # Compute descriptors
-        keypoints_t = keypoints[:, [1, 0]].transpose(1, 0)  # swap x, y and transpose
+        keypoints_t = keypoints[:, [1, 0]].transpose(
+            1, 0)  # swap x, y and transpose
         fmap_keypoints = downscale_positions(keypoints_t, scaling_steps=2)
 
-        raw_descriptors, _, _ = interpolate_dense_features(fmap_keypoints, features[0])
+        raw_descriptors, _, _ = interpolate_dense_features(
+            fmap_keypoints, features[0])
         descriptors = F.normalize(raw_descriptors, dim=0)
 
         return {"kpts": [keypoints], "scores": [scores], "desc": [descriptors], "size": [data["size"]]}
 
 
 default_cfgs = {
-    "d2net_ots": _cfg(
+    "d2net_ots": merge_config(
         url="https://dusmanu.com/files/d2-net/d2_ots.pth",
         multiscale=False,
         max_keypoints=-1,
         descriptor_dim=512,
     ),
-    "d2net_tf": _cfg(
+    "d2net_tf": merge_config(
         url="https://dusmanu.com/files/d2-net/d2_tf.pth",
         multiscale=False,
         max_keypoints=-1,
         descriptor_dim=512,
     ),
-    "d2net_tf_no_phototourism": _cfg(
+    "d2net_tf_no_phototourism": merge_config(
         url="https://dusmanu.com/files/d2-net/d2_tf_no_phototourism.pth",
         multiscale=False,
         max_keypoints=-1,

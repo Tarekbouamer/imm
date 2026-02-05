@@ -4,9 +4,13 @@ import cv2
 import numpy as np
 from loguru import logger
 
+<<<<<<< HEAD
 from imm.estimators._camera import Camera
 from imm.estimators.estimator import Estimator
 from imm.utils.check import CHECK_SHAPE, CHECK_TYPE
+=======
+from imm.geometry import Camera
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
 from ._conversions import convert_points_from_homogeneous, essential_from_Rt
 from ._helper import get_backend
@@ -52,9 +56,15 @@ class OpenCVRelativePoseEstimator(Estimator):
         confidence: float = 0.999,
         max_iters: int = 1000,
     ):
+<<<<<<< HEAD
         super().__init__()
         if solver not in CV_RP_SOLVERS:
             raise ValueError(f"Invalid solver: {solver}. Valid options are: {list(CV_RP_SOLVERS.keys())}")
+=======
+        if solver not in CV_SOLVERS:
+            raise ValueError(
+                f"Invalid solver: {solver}. Valid options are: {list(CV_SOLVERS.keys())}")
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
         self.solver = solver
         self.threshold = threshold
@@ -95,6 +105,7 @@ class OpenCVRelativePoseEstimator(Estimator):
         try:
             # Five correspondences
             if pts0.shape[0] < 5:
+<<<<<<< HEAD
                 logger.warning(f"Number of correspondences is less than 5: {pts0.shape[0]}.")
                 return {
                     "success": False,
@@ -108,6 +119,17 @@ class OpenCVRelativePoseEstimator(Estimator):
             # Normalize the points
             pts0 = camera0.image2camera(pts0)
             pts1 = camera1.image2camera(pts1)
+=======
+                logger.warning(
+                    f"Number of correspondences is less than 5: {pts0.shape[0]}.")
+                return {"success": False, "R": None, "t": None, "inliers": None, "num_inliers": 0}
+
+            # Undistort points if camera matrices are provided
+            pts0 = cv2.undistortPoints(
+                pts0, camera0, distCoeffs=distCoeffs).reshape(-1, 2)
+            pts1 = cv2.undistortPoints(
+                pts1, camera1, distCoeffs=distCoeffs).reshape(-1, 2)
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
             # Normalize the threshold
             f_mean = np.array([camera0.fx, camera1.fx]).mean().item()
@@ -140,7 +162,8 @@ class OpenCVRelativePoseEstimator(Estimator):
                 }
 
             # Recover the relative pose (R and t)
-            _, R, t, mask_recover = cv2.recoverPose(E, pts0, pts1, cameraMatrix=np.eye(3), mask=mask)
+            _, R, t, mask_recover = cv2.recoverPose(
+                E, pts0, pts1, cameraMatrix=np.eye(3), mask=mask)
 
             return {
                 "success": True,

@@ -66,7 +66,7 @@ def is_model_pretrained(model_name: str) -> bool:
     return model_name in _model_has_pretrained
 
 
-def get_pretrained_cfg(model_name: str) -> dict:
+def get_pretrainedmerge_config(model_name: str) -> dict:
     """Get the pretrained configuration for a model, if available."""
     return _model_pretrained_cfgs.get(model_name, {})
 
@@ -108,6 +108,75 @@ def list_models(module: str = "", pretrained: bool = False, name_matches_cfg: bo
     if name_matches_cfg:
         models = {m for m in models if m in _model_pretrained_cfgs}
     return sorted(models, key=_natural_key)
+
+
+def download_model_weights(
+    variant: str,
+    pretrained_cfg: Dict[str, Any],
+    save_dir: Union[str, Path] = "hub",
+) -> Path:
+    """
+    Download pretrained model weights to disk.
+
+    Args:
+        variant (str): Model variant name (e.g., 'superpoint', 'loftr_outdoor').
+        pretrained_cfg (Dict[str, Any]): Configuration with 'url', 'drive', or 'file' key.
+        save_dir (Union[str, Path]): Directory to save weights. Defaults to 'hub'.
+
+    Returns:
+        Path: Path to the downloaded weights file.
+
+    Raises:
+        ValueError: If pretrained configuration is invalid.
+        RuntimeError: If download fails.
+    """
+    save_folder = Path(save_dir)
+    save_folder.mkdir(parents=True, exist_ok=True)
+    save_path = save_folder / f"{variant}.pth"
+
+    # Check if already downloaded
+    if save_path.exists():
+        logger.info(f"Model weights already exist at {save_path}")
+        return save_path
+
+    try:
+        if "file" in pretrained_cfg and pretrained_cfg["file"]:
+            # Reference to local file - copy or just return path
+            local_file = Path(pretrained_cfg["file"])
+            if local_file.exists():
+                logger.success(f"Using local file: {local_file}")
+                return local_file
+            else:
+                raise FileNotFoundError(f"Local file not found: {local_file}")
+
+        elif "url" in pretrained_cfg and pretrained_cfg["url"]:
+            # Download from HTTP URL
+            logger.info(f"Downloading from URL: {pretrained_cfg['url']}")
+            state_dict = load_state_dict_from_url(
+                pretrained_cfg["url"],
+                map_location="cpu",
+                progress=True,
+                file_name=save_path.name,
+                model_dir=str(save_path.parent),
+            )
+            torch.save(state_dict, save_path)
+            logger.success(f"Downloaded to {save_path}")
+
+        elif "drive" in pretrained_cfg and pretrained_cfg["drive"]:
+            # Download from Google Drive
+            logger.info(f"Downloading from Google Drive: {pretrained_cfg['drive']}")
+            save_path = Path(gdown.download(pretrained_cfg["drive"], str(save_path), quiet=False))
+            logger.success(f"Downloaded to {save_path}")
+
+        else:
+            raise ValueError("Invalid pretrained configuration. Specify 'file', 'url', or 'drive'.")
+
+    except Exception as e:
+        if save_path.exists():
+            save_path.unlink()  # Remove partial download
+        raise RuntimeError(f"Error downloading model weights: {e}")
+
+    return save_path
 
 
 def load_model_weights(

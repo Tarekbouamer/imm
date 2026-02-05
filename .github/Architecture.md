@@ -242,21 +242,28 @@
 │  │  - Non-blocking pipeline                                  │    │
 │  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
-│  Run Management & Manifest                                         │
+│  Manifest System (imm/utils/manifest.py)                           │
 │  ┌────────────────────────────────────────────────────────────┐    │
-│  │ Run Manifest (JSON):                                       │    │
-│  │ {                                                          │    │
-│  │   "run_id": "2026-02-04_12-34-56",                        │    │
-│  │   "config": {model_names, device, dtype, ...},           │    │
-│  │   "metadata": {timestamp, user, version},                 │    │
-│  │   "results_path": "output/run_id/",                       │    │
-│  │   "status": "completed"                                   │    │
-│  │ }                                                          │    │
+│  │ Pure Function API:                                         │    │
+│  │  - create_extraction_manifest()                            │    │
+│  │      → Returns dict with config, stats, environment        │    │
+│  │  - create_matching_manifest()                              │    │
+│  │      → Returns dict with matcher config, pair stats        │    │
+│  │  - create_estimation_manifest()                            │    │
+│  │      → Returns dict with success rates, inlier stats       │    │
+│  │  - save_manifest(manifest_dict, output_path)               │    │
+│  │      → Saves to <output>_manifest.json                     │    │
 │  │                                                            │    │
-│  │ Run Management:                                           │    │
-│  │  - Query historical runs                                  │    │
-│  │  - Replay previous configurations                         │    │
-│  │  - Export complete pipelines                              │    │
+│  │ Manifest Contents:                                         │    │
+│  │  - Model config (extractor/matcher/estimator)             │    │
+│  │  - Processing stats (avg keypoints, matches, inliers)      │    │
+│  │  - Environment info (Python, PyTorch, CUDA, GPU)           │    │
+│  │  - Errors and failures                                     │    │
+│  │  - Throughput metrics (images/sec, pairs/sec)              │    │
+│  │                                                            │    │
+│  │ Usage in CLI:                                             │    │
+│  │  manifest = create_extraction_manifest(...)               │    │
+│  │  save_manifest(manifest, output_path)                      │    │
 │  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
 │  Caching & Performance                                             │

@@ -229,7 +229,7 @@
 # def _make_model(name, cfg=None, pretrained=True, **kwargs):
 
 #     # cfg
-#     default_cfg = get_pretrained_cfg(name)
+#     default_cfg = get_pretrainedmerge_config(name)
 #     cfg = {**default_cfg, **cfg}
 
 #     #
@@ -244,11 +244,11 @@
 
 # default_cfgs = {
 #     'dkm_outdoor':
-#         _cfg(drive='https://github.com/Parskatt/storage/releases/download/dkmv3/DKMv3_outdoor.pth',
+#         merge_config(drive='https://github.com/Parskatt/storage/releases/download/dkmv3/DKMv3_outdoor.pth',
 #              normalize="imagenet"),
 
 #     'dkm_indoor':
-#         _cfg(drive='https://github.com/Parskatt/storage/releases/download/dkmv3/DKMv3_indoor.pth',
+#         merge_config(drive='https://github.com/Parskatt/storage/releases/download/dkmv3/DKMv3_indoor.pth',
 #              normalize="imagenet"),
 # }
 

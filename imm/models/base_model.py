@@ -287,7 +287,7 @@ class ModelBase(nn.Module):
         """
         return next(self.parameters()).device
 
-    def update_cfg(self, new_cfg: Dict[str, Any]) -> None:
+    def updatemerge_config(self, new_cfg: Dict[str, Any]) -> None:
         """
         Update the model configuration.
 

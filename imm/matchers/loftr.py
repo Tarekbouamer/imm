@@ -12,8 +12,8 @@ from kornia.feature.loftr.utils.fine_matching import FineMatching
 from kornia.feature.loftr.utils.position_encoding import PositionEncodingSine
 from kornia.geometry import resize
 
-from imm.base.matcher import MatcherModel
-from imm.misc import _cfg
+from imm.models import MatcherModel
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import MATCHERS_REGISTRY
@@ -132,7 +132,8 @@ class LoFTR(MatcherModel):
         )
 
         if out_data["hw0_i"] == out_data["hw1_i"]:  # faster & better BN convergence
-            feats_c, feats_f = self.backbone(torch.cat([image0, image1], dim=0))
+            feats_c, feats_f = self.backbone(
+                torch.cat([image0, image1], dim=0))
             (feat_c0, feat_c1), (feat_f0, feat_f1) = (
                 feats_c.split(out_data["bs"]),
                 feats_f.split(out_data["bs"]),
@@ -164,22 +165,28 @@ class LoFTR(MatcherModel):
         mask_c0 = mask_c1 = None  # mask is useful in training
 
         if "mask0" in data:
-            mask_c0 = resize(data["mask0"], out_data["hw0_c"], interpolation="nearest").flatten(-2)
+            mask_c0 = resize(data["mask0"], out_data["hw0_c"],
+                             interpolation="nearest").flatten(-2)
             # mask_c0 = data['mask0'].flatten(-2)
 
         if "mask1" in data:
-            mask_c1 = resize(data["mask1"], out_data["hw1_c"], interpolation="nearest").flatten(-2)
+            mask_c1 = resize(data["mask1"], out_data["hw1_c"],
+                             interpolation="nearest").flatten(-2)
             # mask_c1 = data['mask1'].flatten(-2)
 
-        feat_c0, feat_c1 = self.loftr_coarse(feat_c0, feat_c1, mask_c0, mask_c1)
+        feat_c0, feat_c1 = self.loftr_coarse(
+            feat_c0, feat_c1, mask_c0, mask_c1)
 
         # 3. match coarse-level
-        self.coarse_matching(feat_c0, feat_c1, out_data, mask_c0=mask_c0, mask_c1=mask_c1)
+        self.coarse_matching(feat_c0, feat_c1, out_data,
+                             mask_c0=mask_c0, mask_c1=mask_c1)
 
         # 4. fine-level refinement
-        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, out_data)
+        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(
+            feat_f0, feat_f1, feat_c0, feat_c1, out_data)
         if feat_f0_unfold.size(0) != 0:  # at least one coarse level predicted
-            feat_f0_unfold, feat_f1_unfold = self.loftr_fine(feat_f0_unfold, feat_f1_unfold)
+            feat_f0_unfold, feat_f1_unfold = self.loftr_fine(
+                feat_f0_unfold, feat_f1_unfold)
 
         # 5. match fine-level
         self.fine_matching(feat_f0_unfold, feat_f1_unfold, out_data)
@@ -207,21 +214,21 @@ class LoFTR(MatcherModel):
 
 
 default_cfgs = {
-    "loftr_indoor_ds_new": _cfg(
+    "loftr_indoor_ds_new": merge_config(
         drive="https://drive.google.com/uc?id=1UqYrFzAQO7pgEA2n1S_IpNyX39a5Sw4C",
         gray=True,
         match_threshold=0.2,
         temp_bug_fix=True,
         **_config,
     ),
-    "loftr_indoor_ds": _cfg(
+    "loftr_indoor_ds": merge_config(
         drive="https://drive.google.com/uc?id=14daC7NRRqmdB6T3KjIp8AERn2x9IhqZ0",
         gray=True,
         match_threshold=0.2,
         temp_bug_fix=False,
         **_config,
     ),
-    "loftr_outdoor_ds": _cfg(
+    "loftr_outdoor_ds": merge_config(
         drive="https://drive.google.com/uc?id=1kGV9QHuqSKVPucr5QNTdErsGSymkFIdy",
         gray=True,
         match_threshold=0.2,
@@ -237,7 +244,8 @@ def _make_model(name, cfg=None, pretrained=True, **kwargs):
 
     # load
     if pretrained:
-        load_model_weights(model, name, cfg, state_key="state_dict", replace=("matcher.", ""))
+        load_model_weights(
+            model, name, cfg, state_key="state_dict", replace=("matcher.", ""))
 
     return model
 

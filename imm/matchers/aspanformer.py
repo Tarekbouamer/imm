@@ -4,7 +4,7 @@ import torch
 import torchvision.transforms as tfn
 from einops.einops import rearrange
 
-from imm.base import MatcherModel
+from imm.models import MatcherModel
 from imm.matchers.modules.aspanformer_modules import (
     CoarseMatching,
     FineMatching,
@@ -14,7 +14,7 @@ from imm.matchers.modules.aspanformer_modules import (
     PositionEncodingSine,
     build_backbone,
 )
-from imm.misc import _cfg
+from imm.utils.config import merge_config
 from imm.registry.factory import load_model_weights
 
 from ._helper import MATCHERS_REGISTRY
@@ -116,8 +116,10 @@ class ASpanFormer(MatcherModel):
         image0 = tfn.Resize([480, 640], antialias=True)(image0)
         image1 = tfn.Resize([480, 640], antialias=True)(image1)
 
-        scale00 = torch.tensor([data["image0"].shape[2] / 640, data["image0"].shape[1] / 480]).to(image0.device)
-        scale11 = torch.tensor([data["image1"].shape[2] / 640, data["image1"].shape[1] / 480]).to(image1.device)
+        scale00 = torch.tensor(
+            [data["image0"].shape[2] / 640, data["image0"].shape[1] / 480]).to(image0.device)
+        scale11 = torch.tensor(
+            [data["image1"].shape[2] / 640, data["image1"].shape[1] / 480]).to(image1.device)
 
         if image0.dim() == 3:
             image0 = image0.unsqueeze(0)
@@ -163,7 +165,8 @@ class ASpanFormer(MatcherModel):
         )
 
         if data["hw0_i"] == data["hw1_i"]:  # faster & better BN convergence
-            feats_c, feats_f = self.backbone(torch.cat([data["image0"], data["image1"]], dim=0))
+            feats_c, feats_f = self.backbone(
+                torch.cat([data["image0"], data["image1"]], dim=0))
 
             (feat_c0, feat_c1), (feat_f0, feat_f1) = (
                 feats_c.split(data["bs"]),
@@ -185,8 +188,10 @@ class ASpanFormer(MatcherModel):
         )
 
         # 2. coarse-level loftr module [N, HW, C]
-        [feat_c0, pos_encoding0] = self.pos_encoding(feat_c0, data["pos_scale0"])
-        [feat_c1, pos_encoding1] = self.pos_encoding(feat_c1, data["pos_scale1"])
+        [feat_c0, pos_encoding0] = self.pos_encoding(
+            feat_c0, data["pos_scale0"])
+        [feat_c1, pos_encoding1] = self.pos_encoding(
+            feat_c1, data["pos_scale1"])
 
         feat_c0 = rearrange(feat_c0, "n c h w -> n c h w ")
         feat_c1 = rearrange(feat_c1, "n c h w -> n c h w ")
@@ -223,12 +228,15 @@ class ASpanFormer(MatcherModel):
             ds1,
         )
         # 3. match coarse-level and register predicted offset
-        self.coarse_matching(feat_c0, feat_c1, flow_list, data, mask_c0=mask_c0, mask_c1=mask_c1)
+        self.coarse_matching(feat_c0, feat_c1, flow_list,
+                             data, mask_c0=mask_c0, mask_c1=mask_c1)
 
         # 4. fine-level refinement
-        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, data)
+        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(
+            feat_f0, feat_f1, feat_c0, feat_c1, data)
         if feat_f0_unfold.size(0) != 0:  # at least one coarse level predicted
-            feat_f0_unfold, feat_f1_unfold = self.loftr_fine(feat_f0_unfold, feat_f1_unfold)
+            feat_f0_unfold, feat_f1_unfold = self.loftr_fine(
+                feat_f0_unfold, feat_f1_unfold)
 
         # 5. match fine-level
         self.fine_matching(feat_f0_unfold, feat_f1_unfold, data)
@@ -285,8 +293,10 @@ class ASpanFormer(MatcherModel):
             ],
         )
         data["online_resize_scale0"], data["online_resize_scale1"] = (
-            torch.tensor([w0 / data["image0"].shape[3], h0 / data["image0"].shape[2]])[None].cuda(),
-            torch.tensor([w1 / data["image1"].shape[3], h1 / data["image1"].shape[2]])[None].cuda(),
+            torch.tensor([w0 / data["image0"].shape[3], h0 /
+                         data["image0"].shape[2]])[None].cuda(),
+            torch.tensor([w1 / data["image1"].shape[3], h1 /
+                         data["image1"].shape[2]])[None].cuda(),
         )
 
     def resize_df(self, image, df=32):
@@ -300,7 +310,7 @@ class ASpanFormer(MatcherModel):
 
 
 default_cfgs = {
-    "aspanformer_indoor": _cfg(
+    "aspanformer_indoor": merge_config(
         drive="https://drive.google.com/uc?id=1p-Wbx26qsw3zSy1Cv7NTCMOYdlxy5CMs",
         gray=True,
         match_threshold=0.2,
@@ -309,7 +319,7 @@ default_cfgs = {
         test_res=[480, 640],
         **_config,
     ),
-    "aspanformer_outdoor": _cfg(
+    "aspanformer_outdoor": merge_config(
         drive="https://drive.google.com/uc?id=1XBLixHDw9HasBkABTMIdAP5LbILM1OdE",
         gray=True,
         match_threshold=0.2,
@@ -327,7 +337,8 @@ def _make_model(name, cfg=None, pretrained=True, **kwargs):
 
     # load
     if pretrained:
-        load_model_weights(model, name, cfg, state_key="state_dict", replace=("matcher.", ""))
+        load_model_weights(
+            model, name, cfg, state_key="state_dict", replace=("matcher.", ""))
 
     return model
 

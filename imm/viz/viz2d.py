@@ -1,14 +1,21 @@
 import enum
+import os
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import cv2
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
 
-# backend tk
-plt.switch_backend("tkagg")
+from imm.utils.io import read_image
+
+# Agg / tkagg
+if not os.environ.get('DISPLAY'):
+    matplotlib.use('Agg')  # Headless backend
+else:
+    matplotlib.use('tkagg')  # Interactive backend
 
 
 class VizType(enum.Enum):
@@ -16,44 +23,39 @@ class VizType(enum.Enum):
     MATCH = 2
 
 
-def load_image(image: Union[np.ndarray, str, Path]) -> np.ndarray:
-    if isinstance(image, (str, Path)):
-        image = cv2.imread(str(image))
-        if image is None:
-            raise ValueError(f"Failed to load image from path: {image}")
-    elif isinstance(image, np.ndarray):
-        pass
-    else:
-        raise ValueError("Input should be a file path or a numpy.ndarray")
-    return image
-
-
 class Viz2D:
-    def __init__(self):
-        self.results = None  # Class member to hold the drawn results
+    """Base class for 2D visualization."""
 
-    def ensure_rgb(self, image: Union[np.ndarray, str, Path]) -> np.ndarray:
-        image = load_image(image)
-        if len(image.shape) == 2 or image.shape[2] == 1:  # Grayscale image
-            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-        elif image.shape[2] == 4:  # RGBA image
-            image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-        return image
+    def __init__(self):
+        self.results = None
 
     def draw_image(self, image: Union[np.ndarray, str, Path], title: str = "Image", show_image: bool = True):
-        image = self.ensure_rgb(image)
+        """Draw single image.
+
+        Args:
+            image: Image path or numpy array
+            title: Image title
+            show_image: Whether to display the image
+        """
+        image, _ = read_image(image)
         self.results = image
 
         if show_image:
             plt.figure(figsize=(10, 10))
-            plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            plt.imshow(image)
             plt.title(title)
             plt.axis("off")
             plt.show()
 
     def save(self, file_path: str):
+        """Save visualization result to file.
+
+        Args:
+            file_path: Output file path
+        """
         if self.results is not None:
-            cv2.imwrite(file_path, self.results)
+            image_rgb = cv2.cvtColor(self.results, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(file_path, image_rgb)
         else:
             logger.warning("No image to save.")
 
@@ -63,8 +65,23 @@ class Viz2D:
         image1: Union[np.ndarray, str, Path],
         offset: int = 10,
     ) -> np.ndarray:
+<<<<<<< HEAD:imm/utils/viz2d.py
         image0 = self.ensure_rgb(image0)
         image1 = self.ensure_rgb(image1)
+=======
+        """Draw two images side by side.
+
+        Args:
+            image1: First image
+            image2: Second image
+            offset: Pixel offset between images
+
+        Returns:
+            Composite image with both images side by side
+        """
+        image1, _ = read_image(image1)
+        image2, _ = read_image(image2)
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/viz/viz2d.py
 
         h0, w0, _ = image0.shape
         h1, w1, _ = image1.shape
@@ -72,16 +89,24 @@ class Viz2D:
         max_height = max(h0, h1)
         total_width = w0 + w1 + offset
 
-        composite_image = np.ones((max_height, total_width, 3), dtype=np.uint8) * 255
+        composite_image = np.ones(
+            (max_height, total_width, 3), dtype=np.uint8) * 255
 
+<<<<<<< HEAD:imm/utils/viz2d.py
         composite_image[:h0, :w0, :] = image0
         composite_image[:h1, w0 + offset : w0 + offset + w1, :] = image1
+=======
+        composite_image[:h1, :w1, :] = image1
+        composite_image[:h2, w1 + offset: w1 + offset + w2, :] = image2
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/viz/viz2d.py
 
         self.results = composite_image  # Store the drawn result
         return composite_image
 
 
 class KeypointVisualizer(Viz2D):
+    """Visualizer for keypoints and features."""
+
     def __init__(self):
         super().__init__()
 
@@ -94,11 +119,23 @@ class KeypointVisualizer(Viz2D):
         default_color: Tuple[int, int, int] = (0, 0, 255),
         show_image: bool = True,
     ):
-        image_with_keypoints = self.ensure_rgb(image).copy()
+        """Draw keypoints on image.
+
+        Args:
+            image: Image path or numpy array
+            keypoints: Keypoint coordinates (N, 2)
+            scores: Optional keypoint scores for color mapping
+            title: Image title
+            default_color: Color for keypoints when scores are not provided
+            show_image: Whether to display the image
+        """
+        image_with_keypoints, _ = read_image(image)
+        image_with_keypoints = image_with_keypoints.copy()
 
         if scores is not None:
             if len(keypoints) != len(scores):
-                raise ValueError("Keypoints and scores must have the same length")
+                raise ValueError(
+                    "Keypoints and scores must have the same length")
             cmap = plt.get_cmap("coolwarm")
             norm = plt.Normalize(0, 1)
             for kp, score in zip(keypoints, scores):
@@ -108,7 +145,8 @@ class KeypointVisualizer(Viz2D):
                     int(color[1] * 255),
                     int(color[2] * 255),
                 )
-                cv2.circle(image_with_keypoints, (int(kp[0]), int(kp[1])), 3, color, -1)
+                cv2.circle(image_with_keypoints,
+                           (int(kp[0]), int(kp[1])), 3, color, -1)
         else:
             for kp in keypoints:
                 cv2.circle(
@@ -125,6 +163,8 @@ class KeypointVisualizer(Viz2D):
 
 
 class MatchVisualizer(Viz2D):
+    """Visualizer for keypoint matches between images."""
+
     def __init__(self):
         super().__init__()
 
@@ -143,14 +183,42 @@ class MatchVisualizer(Viz2D):
         color_lines: Optional[Tuple[int, int, int]] = (0, 255, 0),
         title: str = "Matches",
         show_image: bool = True,
+<<<<<<< HEAD:imm/utils/viz2d.py
     ) -> np.ndarray:
         image0_rgb = self.ensure_rgb(image0)
         image1_rgb = self.ensure_rgb(image1)
         composite_image = self.draw_composite_image(image0_rgb, image1_rgb)
+=======
+    ):
+        """Draw matches between two images.
+
+        Args:
+            image1: First image
+            image2: Second image
+            kpts0: All keypoints in first image
+            kpts1: All keypoints in second image
+            mkpts0: Matched keypoints in first image
+            mkpts1: Matched keypoints in second image
+            matches: Match indices (optional)
+            mscores: Match confidence scores (optional)
+            color_inliers: Color for matched keypoints
+            color_outliers: Color for unmatched keypoints
+            color_lines: Color for match lines
+            title: Visualization title
+            show_image: Whether to display the image
+
+        Returns:
+            Composite image with matches drawn
+        """
+        image1_rgb, _ = read_image(image1)
+        image2_rgb, _ = read_image(image2)
+        composite_image = self.draw_composite_image(image1_rgb, image2_rgb)
+>>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/viz/viz2d.py
 
         # Draw all keypoints
         for kp in kpts0:
-            cv2.circle(composite_image, (int(kp[0]), int(kp[1])), 3, color_outliers, -1)
+            cv2.circle(composite_image, (int(kp[0]), int(
+                kp[1])), 3, color_outliers, -1)
         for kp in kpts1:
             cv2.circle(
                 composite_image,

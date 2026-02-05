@@ -35,7 +35,8 @@ class ModelRegistry:
 
         def decorator(cls: Type[nn.Module]) -> Type[nn.Module]:
             if name in self._registry:
-                raise KeyError(f"Model '{name}' is already registered in {self.name}")
+                raise KeyError(
+                    f"Model '{name}' is already registered in {self.name}")
             # if not issubclass(cls, nn.Module):
             #     raise TypeError(f"Registered model must be a subclass of nn.Module, got {cls}")
             self._registry[name] = {
@@ -91,12 +92,13 @@ class ModelRegistry:
         model_info = self.get(name)
         model_class = model_info["class"]
 
+        # Config merging: default_cfg → user cfg → kwargs
         model_cfg = model_info["default_cfg"].copy()
         if cfg is not None:
             model_cfg.update(cfg)
         model_cfg.update(kwargs)
 
-        return model_class(cfg=model_cfg, pretrained=pretrained, **kwargs)
+        return model_class(cfg=model_cfg, pretrained=pretrained)
 
     def is_model(self, name: str) -> bool:
         """
@@ -126,7 +128,7 @@ class ModelRegistry:
         model_info = self.get(name)
         return model_info["default_cfg"].get("pretrained", False)
 
-    def get_default_cfg(self, name: str) -> Dict[str, Any]:
+    def get_defaultmerge_config(self, name: str) -> Dict[str, Any]:
         """
         Get the default configuration for a model.
 
@@ -153,7 +155,8 @@ class ModelRegistry:
             KeyError: If the model is not found in the registry.
         """
         if name not in self._registry:
-            raise KeyError(f"No model registered under name '{name}' in {self.name}")
+            raise KeyError(
+                f"No model registered under name '{name}' in {self.name}")
         del self._registry[name]
 
     def __len__(self) -> int:
@@ -172,7 +175,8 @@ class ModelRegistry:
         table.add_column("Model Class", style="cyan")
         table.add_column("Default Config", style="green")
         for name, info in self._registry.items():
-            table.add_row(name, info["class"].__name__, str(info["default_cfg"]))
+            table.add_row(name, info["class"].__name__,
+                          str(info["default_cfg"]))
         console = Console()
         console.print(table)
         return f"{self.name} Model Registry with {len(self)} models."

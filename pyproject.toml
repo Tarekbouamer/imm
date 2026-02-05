@@ -27,10 +27,13 @@ Source = "https://github.com/Tarekbouamer/imm"
 Tracker = "https://github.com/Tarekbouamer/imm/issues"
 
 [project.entry-points.console_scripts]
-imm-match = "imm.tools.match:match_images"
-imm-extract = "imm.tools.extract:extract"
-imm-estimate = "imm.tools.estimate:cli"
+imm-match = "imm.cli._match:match_images"
+imm-extract = "imm.cli._extract:extract"
+imm-estimate = "imm.cli._estimate:cli"
 imm-gui = "imm.ui:main"
+imm-download = "imm.cli._download:download"
+imm-export = "imm.cli._export:export"
+imm-optimize = "imm.cli._optimize:cli"
 
 [project.optional-dependencies]
 extra = [
