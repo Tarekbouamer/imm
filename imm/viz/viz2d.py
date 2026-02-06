@@ -54,8 +54,8 @@ class Viz2D:
             file_path: Output file path
         """
         if self.results is not None:
-            image_rgb = cv2.cvtColor(self.results, cv2.COLOR_BGR2RGB)
-            cv2.imwrite(file_path, image_rgb)
+            # Results are already in BGR format (OpenCV default)
+            cv2.imwrite(file_path, self.results)
         else:
             logger.warning("No image to save.")
 
@@ -304,3 +304,69 @@ class MatchVisualizer(Viz2D):
 
         self.draw_image(composite_image, title, show_image=show_image)
         return composite_image
+
+
+class HomographyVisualizer(Viz2D):
+    """Visualizer for homography transformations."""
+
+    def __init__(self):
+        super().__init__()
+
+    def draw_homography_warp(
+        self,
+        image1: Union[np.ndarray, str, Path],
+        image2: Union[np.ndarray, str, Path],
+        H: np.ndarray,
+        alpha: float = 0.5,
+        title: str = "Homography Warp",
+        show_image: bool = True,
+    ) -> np.ndarray:
+        """Warp image1 to image2 using homography and blend for visualization.
+
+        Args:
+            image1: Source image to warp
+            image2: Target image for alignment
+            H: 3x3 homography matrix
+            alpha: Blending factor (0.0 = only warped, 1.0 = only target)
+            title: Visualization title
+            show_image: Whether to display the image
+
+        Returns:
+            Blended warped image
+        """
+        image1, _ = read_image(image1)
+        image2, _ = read_image(image2)
+
+        # Get target dimensions
+        h, w = image2.shape[:2]
+
+        # Warp image1 to align with image2
+        warped = cv2.warpPerspective(image1, H, (w, h))
+
+        # Blend warped image with target
+        blended = cv2.addWeighted(warped, 1 - alpha, image2, alpha, 0)
+
+        self.results = blended
+
+        if show_image:
+            plt.figure(figsize=(15, 5))
+
+            plt.subplot(1, 3, 1)
+            plt.imshow(cv2.cvtColor(image1, cv2.COLOR_BGR2RGB))
+            plt.title("Source Image")
+            plt.axis("off")
+
+            plt.subplot(1, 3, 2)
+            plt.imshow(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB))
+            plt.title("Warped Source")
+            plt.axis("off")
+
+            plt.subplot(1, 3, 3)
+            plt.imshow(cv2.cvtColor(blended, cv2.COLOR_BGR2RGB))
+            plt.title(f"{title} (α={alpha})")
+            plt.axis("off")
+
+            plt.tight_layout()
+            plt.show()
+
+        return blended

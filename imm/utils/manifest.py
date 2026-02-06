@@ -1,5 +1,7 @@
 import json
+import os
 import platform
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -7,33 +9,109 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
+import imm
+
 
 def get_environment_info() -> Dict[str, Any]:
-    """Get system environment information."""
+    """Get comprehensive system environment information.
+
+    Captures:
+    - Python and PyTorch versions
+    - Platform information
+    - CPU model and core count
+    - All available GPU devices with memory info
+    - Optional package versions (opencv, poselib, pycolmap)
+
+    Returns:
+        Dictionary with environment details
+    """
     env = {
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "torch_version": torch.__version__,
         "platform": platform.platform(),
     }
 
+    # CPU information
+    try:
+        cpu_count = os.cpu_count() or 1
+        env["cpu_cores"] = cpu_count
+        # Try to get CPU model name
+        try:
+            if platform.system() == "Linux":
+                cpu_model = subprocess.check_output(
+                    "grep -m 1 'model name' /proc/cpuinfo | cut -d ':' -f 2 | xargs",
+                    shell=True, text=True, stderr=subprocess.DEVNULL).strip()
+                if cpu_model:
+                    env["cpu_model"] = cpu_model
+            elif platform.system() == "Darwin":
+                cpu_model = subprocess.check_output(
+                    "sysctl -n machdep.cpu.brand_string",
+                    shell=True, text=True, stderr=subprocess.DEVNULL).strip()
+                if cpu_model:
+                    env["cpu_model"] = cpu_model
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    # GPU information - all devices
     if torch.cuda.is_available():
         env["cuda_version"] = torch.version.cuda
-        env["gpu_name"] = torch.cuda.get_device_name(0)
-        env["gpu_memory_gb"] = round(
-            torch.cuda.get_device_properties(0).total_memory / 1024**3, 2)
+        env["gpu_count"] = torch.cuda.device_count()
+        env["gpus"] = []
+        for i in range(torch.cuda.device_count()):
+            gpu_info = {
+                "device_id": i,
+                "name": torch.cuda.get_device_name(i),
+                "memory_gb": round(
+                    torch.cuda.get_device_properties(i).total_memory / 1024**3, 2),
+            }
+            env["gpus"].append(gpu_info)
+
+    # IMM package version
+    env["imm_version"] = imm.__version__
+
+    # Optional package versions
+    optional_packages = {
+        "opencv": "cv2",
+        "poselib": "poselib",
+        "pycolmap": "pycolmap",
+    }
+
+    for pkg_name, import_name in optional_packages.items():
+        try:
+            module = __import__(import_name)
+            if hasattr(module, "__version__"):
+                env[f"{pkg_name}_version"] = module.__version__
+        except ImportError:
+            pass
 
     return env
 
 
 def get_file_size_mb(file_path: Path) -> float:
-    """Get file size in MB."""
+    """Get file size in MB.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        File size in MB, or 0.0 if file doesn't exist
+    """
     if not file_path.exists():
         return 0.0
     return round(file_path.stat().st_size / (1024 * 1024), 2)
 
 
 def calculate_stats(values: List[float]) -> Dict[str, float]:
-    """Calculate min/max/avg statistics."""
+    """Calculate min/max/avg statistics.
+
+    Args:
+        values: List of numeric values to analyze
+
+    Returns:
+        Dictionary with 'avg', 'min', 'max' keys
+    """
     if not values:
         return {"avg": 0.0, "min": 0.0, "max": 0.0}
 
@@ -57,6 +135,7 @@ def create_extraction_manifest(
     processing_times_ms: Optional[List[float]] = None,
     resume_mode: bool = False,
     errors: Optional[List[Dict[str, Any]]] = None,
+    parent_manifest: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create extraction manifest dictionary.
 
@@ -73,6 +152,7 @@ def create_extraction_manifest(
         processing_times_ms: List of processing times per image (ms)
         resume_mode: Whether resume mode was used
         errors: List of errors encountered
+        parent_manifest: Path to parent manifest for workflow chaining
 
     Returns:
         Manifest dictionary
@@ -80,6 +160,7 @@ def create_extraction_manifest(
     total_images = len(processed_images)
 
     manifest = {
+        "stage": "extraction",
         "extractor": extractor_name,
         "config": config,
         "device": device,
@@ -96,6 +177,10 @@ def create_extraction_manifest(
         "resume_mode": resume_mode,
         "images": processed_images,
     }
+
+    # Add parent manifest reference if provided
+    if parent_manifest:
+        manifest["parent_manifest"] = parent_manifest
 
     # Add statistics if available
     if keypoint_counts:
@@ -127,6 +212,7 @@ def create_matching_manifest(
     processing_times_ms: Optional[List[float]] = None,
     resume_mode: bool = False,
     errors: Optional[List[Dict[str, Any]]] = None,
+    parent_manifest: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create matching manifest dictionary.
 
@@ -146,6 +232,7 @@ def create_matching_manifest(
         processing_times_ms: List of processing times per pair (ms)
         resume_mode: Whether resume mode was used
         errors: List of errors encountered
+        parent_manifest: Path to parent manifest for workflow chaining
 
     Returns:
         Manifest dictionary
@@ -153,6 +240,7 @@ def create_matching_manifest(
     total_pairs = len(processed_pairs)
 
     manifest = {
+        "stage": "matching",
         "matcher": matcher_name,
         "extractor": extractor_name,
         "config": config,
@@ -171,6 +259,10 @@ def create_matching_manifest(
         "resume_mode": resume_mode,
         "pairs": processed_pairs,
     }
+
+    # Add parent manifest reference if provided
+    if parent_manifest:
+        manifest["parent_manifest"] = parent_manifest
 
     # Add statistics if available
     if match_counts:
@@ -201,6 +293,7 @@ def create_estimation_manifest(
     matches_file: Optional[str] = None,
     output_file: Optional[str] = None,
     errors: Optional[List[Dict[str, Any]]] = None,
+    parent_manifest: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create estimation manifest dictionary.
 
@@ -215,6 +308,7 @@ def create_estimation_manifest(
         matches_file: Input matches file
         output_file: Output file (if applicable)
         errors: List of errors encountered
+        parent_manifest: Path to parent manifest for workflow chaining
 
     Returns:
         Manifest dictionary
@@ -234,6 +328,7 @@ def create_estimation_manifest(
                         for r in pair_results if "processing_time_ms" in r]
 
     manifest = {
+        "stage": "estimation",
         "estimator": estimator_name,
         "backend": backend,
         "solver": solver,
@@ -251,6 +346,10 @@ def create_estimation_manifest(
         "matches_file": matches_file,
         "pairs": pair_results,
     }
+
+    # Add parent manifest reference if provided
+    if parent_manifest:
+        manifest["parent_manifest"] = parent_manifest
 
     # Add statistics
     stats = {}
@@ -282,9 +381,11 @@ def create_estimation_manifest(
 def save_manifest(manifest: Dict[str, Any], output_path: Path) -> None:
     """Save manifest dictionary to JSON file.
 
+    Saves the manifest with the naming convention: <stem>_manifest.json
+
     Args:
-        manifest: Manifest dictionary
-        output_path: Path to save manifest (will create <stem>_manifest.json)
+        manifest: Manifest dictionary to save
+        output_path: Base output path (manifest file created as <stem>_manifest.json)
     """
     manifest_path = output_path.parent / f"{output_path.stem}_manifest.json"
     with open(manifest_path, "w") as f:

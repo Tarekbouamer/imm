@@ -486,17 +486,91 @@
 │                        Command-Line Tools                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  imm-extract                                                        │
-│  $ imm-extract image.jpg --model superpoint --device cuda          │
+│  imm-extract (Single/Dataset Extraction)                            │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ $ imm-extract image.jpg --model superpoint --device cuda   │    │
+│  │ $ imm-extract dataset/ --model superpoint --output feat.h5 │    │
+│  │                                                            │    │
+│  │ Options:                                                  │    │
+│  │  --model: Extractor name (superpoint, disk, etc.)         │    │
+│  │  --max_keypoints: Maximum keypoints per image             │    │
+│  │  --resize: Max image dimension                            │    │
+│  │  --output: HDF5 output path                               │    │
+│  │  --batch_size, --num_workers: DataLoader parallelization  │    │
+│  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
-│  imm-match                                                          │
-│  $ imm-match image1.jpg image2.jpg --matcher superglue             │
+│  imm-match (Click Group with 3 Subcommands)                         │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ Subcommand: pair                                           │    │
+│  │   Match single image pair                                 │    │
+│  │   $ imm-match pair img0.jpg img1.jpg \                     │    │
+│  │       --matcher superglue_outdoor \                        │    │
+│  │       --extractor superpoint \                             │    │
+│  │       --output output/ --show                              │    │
+│  │                                                            │    │
+│  │ Subcommand: images                                        │    │
+│  │   Match multiple image pairs from directory               │    │
+│  │   $ imm-match images assets/phototourism/ \               │    │
+│  │       --pairs pairs.txt \                                  │    │
+│  │       --matcher loftr_outdoor_ds \                         │    │
+│  │       --output matches.h5 \                                │    │
+│  │       --batch_size 4 --num_workers 4                       │    │
+│  │                                                            │    │
+│  │ Subcommand: features                                      │    │
+│  │   Match from pre-extracted features                       │    │
+│  │   $ imm-match features output/features.h5 \               │    │
+│  │       --pairs pairs.txt \                                  │    │
+│  │       --matcher superglue_outdoor \                        │    │
+│  │       --output matches.h5 --batch_size 8                   │    │
+│  │                                                            │    │
+│  │ Common Options:                                           │    │
+│  │  --matcher: Matcher name (sparse: superglue, lightglue;   │    │
+│  │             dense: loftr, matchformer, aspanformer, dkm)  │    │
+│  │  --extractor: Extractor for sparse matchers (optional     │    │
+│  │               for pair/images, not used in features)       │    │
+│  │  --match_thd: Match score threshold                        │    │
+│  │  --resize: Max image dimension (pair/images only)          │    │
+│  │  --output: Directory for matches.h5 + manifest.json        │    │
+│  │                                                            │    │
+│  │ Pairs File Format (space-separated):                      │    │
+│  │   image0.jpg image1.jpg                                   │    │
+│  │   image2.jpg image3.jpg                                   │    │
+│  │   # comments allowed                                      │    │
+│  │                                                            │    │
+│  │ Output Structure:                                         │    │
+│  │   output/                                                 │    │
+│  │     ├─ matches.h5           (HDF5 with match data)        │    │
+│  │     └─ matches_manifest.json (config, stats, metadata)    │    │
+│  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
-│  imm-estimate                                                       │
-│  $ imm-estimate matches.json --method homography                   │
+│  imm-estimate (Geometric Estimation)                                │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ $ imm-estimate matches.json --method homography            │    │
+│  │                                                            │    │
+│  │ Methods: homography, relative_pose, pnp                    │    │
+│  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
-│  imm-gui                                                            │
-│  $ imm-gui [--server 0.0.0.0:7860]                                 │
+│  imm-download (Model Weight Downloader)                             │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ $ imm-download --all                                       │    │
+│  │ $ imm-download --name superpoint                           │    │
+│  │ $ imm-download --path /custom/dir                          │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  imm-gui (Gradio UI)                                                │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ $ imm-gui [--server 0.0.0.0:7860]                          │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  imm-export (Format Conversion - Stub)                              │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ $ imm-export features.h5 --format colmap                   │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  imm-optimize (Model Optimization - Stub)                           │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ $ imm-optimize --model superpoint --format onnx            │    │
+│  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
 │  imm-metrics (planned)                                              │
 │  $ imm-metrics results/ --metrics auc recall                        │

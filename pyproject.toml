@@ -27,7 +27,7 @@ Source = "https://github.com/Tarekbouamer/imm"
 Tracker = "https://github.com/Tarekbouamer/imm/issues"
 
 [project.entry-points.console_scripts]
-imm-match = "imm.cli._match:match_images"
+imm-match = "imm.cli._match:cli"
 imm-extract = "imm.cli._extract:extract"
 imm-estimate = "imm.cli._estimate:cli"
 imm-gui = "imm.ui:main"

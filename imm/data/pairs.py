@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List, Tuple
 
 import h5py
 import torch
@@ -6,6 +7,19 @@ from loguru import logger
 from torch.utils.data import Dataset
 
 from imm.utils.io import load_image_tensor
+
+
+def parse_pairs_file(pairs_file: Path) -> List[Tuple[str, str]]:
+    """Parse pairs file containing image pairs"""
+    pairs = []
+    with open(pairs_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                parts = line.split()
+                if len(parts) >= 2:
+                    pairs.append((parts[0], parts[1]))
+    return pairs
 
 
 def read_key_from_h5py(name, _path):
@@ -27,12 +41,15 @@ def read_key_from_h5py(name, _path):
 class ImagePairsDataset(Dataset):
     """Dataset for loading pairs of images."""
 
-    def __init__(self, pairs: list, image_dir: Path):
+    def __init__(self, image_dir: Path, pairs: list, resize: int = None):
         # pairs
         self.pairs = pairs
 
         # image_dir
         self.image_dir = image_dir
+
+        # resize
+        self.resize = resize
 
     def __len__(self) -> int:
         return len(self.pairs)
@@ -43,8 +60,8 @@ class ImagePairsDataset(Dataset):
         image1_path = self.image_dir / name1
 
         # Load images
-        image0_tensor, _ = load_image_tensor(image0_path)
-        image1_tensor, _ = load_image_tensor(image1_path)
+        image0_tensor = load_image_tensor(image0_path, resize=self.resize)[0]
+        image1_tensor = load_image_tensor(image1_path, resize=self.resize)[0]
 
         return {"image0": image0_tensor, "image1": image1_tensor, "name0": name0, "name1": name1}
 
@@ -55,7 +72,7 @@ class ImagePairsDataset(Dataset):
 class FeaturesPairsDataset(Dataset):
     """Dataset for pairs of images features."""
 
-    def __init__(self, pairs: list, features_path: Path):
+    def __init__(self, features_path: Path, pairs: list):
         # pairs
         self.pairs = pairs
 

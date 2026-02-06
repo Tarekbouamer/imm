@@ -1,84 +1,35 @@
-# CLI Inconsistencies - Outstanding Tasks
+# Active Tasks & Issues
 
-## Argument Naming (Remaining)
+## Priority 1: Consistency & Caching Infrastructure
 
-- `--det_thd` in `_extract.py` vs `--reproj_thd` in `_estimate.py` (homography) vs `--threshold` in `_estimate.py` (relative_pose) vs `--match_thd` in `_match.py`
+### ✅ 1. Manifest Consistency Between Extraction and Matching (COMPLETED)
 
-**Tasks:**
+**Status:** Done - All environment info unified across extraction, matching, and estimation stages.
 
-- [ ] Standardize threshold naming across all scripts
-- [ ] Rename `--det_thd` → `--det_threshold` in `_extract.py`
-- [ ] Rename `--match_thd` → `--match_threshold` in `_match.py`
+**Completed Steps:**
 
-## Option Order
+1. ✅ Enhanced `get_environment_info()` to capture CPU model/cores and all GPU devices
+2. ✅ Added optional package versions (opencv, poselib, pycolmap, imm) to environment tracking
+3. ✅ Added `output_size_mb` to estimation manifest
+4. ✅ Refactored manifest creation functions to use unified environment info
+5. ✅ Added `stage` identifier and optional `parent_manifest` reference for workflow chaining
 
-**Tasks:**
-
-- [x] Establish standard option order: input paths → model options (matcher/extractor) → processing options (thresholds, sizes) → output options → device/performance flags → help ✓
-- [x] Reorder options in `_extract.py` to match standard ✓
-- [x] Reorder options in `_match.py` to match standard ✓
-- [x] Reorder options in `_estimate.py` to match standard ✓
-
-## Backend/Solver Options
-
-**Tasks:**
-
-- [ ] Document available solvers for each estimation type in help text
+**Benefits Delivered:** Complete audit trail, reproducible workflows, easier metrics aggregation
 
 ---
 
-## Completed Tasks
+### ✅ 2. Homography Warp Preview (COMPLETED)
 
-### Argument Naming (Completed)
+**Status:** Done - Warp visualization added to two-view homography estimation.
 
-- ✓ Standardized image size param to `--resize` (matches `load_image()` function parameter)
-- ✓ Renamed `--max_img_size` → `--resize` in `_extract.py` and `_match.py`
-- ✓ Renamed `--max_size` → `--resize` in `_estimate.py`
+**Completed Steps:**
 
-### Flag Naming (Completed)
+1. ✅ Created `HomographyVisualizer` class inheriting from `Viz2D` base class
+2. ✅ Implemented `draw_homography_warp()` method to warp source to target using homography
+3. ✅ Blend warped and target with configurable `--warp-alpha` for overlap visualization
+4. ✅ Added `--show` flag to `imm-estimate homography` command for display control
+5. ✅ Export warped preview as `homography_warp.png` alongside homography matrix
 
-- ✓ `--force_cpu` consistent across `_extract.py`, `_match.py`, `_estimate.py`
-- ✓ `--visualize` / `--viz` consistent across all scripts
-- ✓ Added `--viz` as short alias for `--visualize`
-
-### Argument Types (Completed)
-
-- ✓ Kept positional arguments for pair-based commands (match, estimate)
-- ✓ Kept option for single/batch input in extract
-- ✓ Design intentionally different based on command purpose
-
-### Default Values (Completed)
-
-- ✓ Standardized `--resize` default to `640` across all scripts
-- ✓ Standardized output parameter to `--output` across all scripts
-- ✓ `--num_workers` at `4` (only in _extract.py where needed)
-
-### Missing Options (Completed)
-
-- ✓ Renamed `--save_path` → `--output` in `_match.py`
-- ✓ Renamed `--output_dir` → `--output` in `_extract.py` and `_estimate.py`
-- ✓ Added `--visualize` to `_extract.py`
-- ✓ Added `--max_keypoints` to both `_estimate.py` commands (homography and relative_pose)
-  - Default: -1 (keeps all keypoints)
-  - Passed to Matching class for consistency with extract and match commands
-
-### Argument Naming (Completed)
-
-- ✓ Renamed homography reprojection threshold option to `--reproj_thd`
-  - Kept `--threshold` for `relative_pose`
-
-### Backend/Solver Options (Completed)
-
-- ✓ Kept backend/solver options specific to estimation commands
+**Benefits Delivered:** Visual verification of registration quality, easier debugging, 3-panel visualization (source, warped, blended)
 
 ---
-
-## Summary of Priority Tasks
-
-### High Priority (Breaking Changes - Needs Coordination)
-
-1. Standardize threshold parameter names (`--det_threshold`, `--match_threshold`)
-
-### Low Priority (Nice to Have)
-
-1. Add usage examples to help texts

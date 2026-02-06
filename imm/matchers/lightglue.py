@@ -363,6 +363,7 @@ class LightGlue(MatcherModel):
     }
 
     required_data_keys = ["kpts0", "kpts1", "desc0", "desc1"]
+    required_inputs = ["kpts0", "kpts1", "desc0", "desc1"]
 
     version = "v0.1_arxiv"
     url = "https://github.com/cvg/LightGlue/releases/download/{}/{}_lightglue.pth"

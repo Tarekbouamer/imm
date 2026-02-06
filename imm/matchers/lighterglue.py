@@ -16,6 +16,8 @@ class LighterGlue(MatcherModel):
     Lighter version of LightGlue :)
     """
 
+    required_inputs = ["kpts0", "kpts1", "desc0", "desc1"]
+
     default_conf_xfeat = {
         "name": "xfeat",  # just for interfacing
         # input descriptor dimension (autoselected from weights)

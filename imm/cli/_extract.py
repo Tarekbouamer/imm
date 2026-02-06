@@ -69,9 +69,6 @@ class Extraction:
         """
         Extracts features from a dataset and saves them to an HDF5 file.
         """
-        # Initialize manifest writer
-        manifest_writer = ManifestWriter(save_path)
-
         # Get existing images from HDF5 if not override
         existing_images = set()
         skipped_count = 0
@@ -153,18 +150,21 @@ class Extraction:
         }
 
         # Save manifest with statistics
-        manifest_writer.save_extraction_manifest(
+        manifest_path = save_path.parent / f"{save_path.stem}_manifest.json"
+        manifest = create_extraction_manifest(
             extractor_name=self.extractor.__class__.__name__,
             config=config,
             device=self.device,
             total_time=total_time,
             processed_images=processed_images,
+            output_file=str(save_path),
             skipped_images=skipped_count,
             failed_images=failed_count,
             keypoint_counts=keypoint_counts if keypoint_counts else None,
             processing_times_ms=processing_times if processing_times else None,
             resume_mode=not override and len(existing_images) > 0,
         )
+        save_manifest(manifest, manifest_path)
 
         logger.info(f"Features saved to {save_path}")
         logger.info(f"Total extraction time: {total_time:.2f} seconds")

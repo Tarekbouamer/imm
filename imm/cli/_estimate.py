@@ -16,10 +16,6 @@ from imm.settings import img1_path as default_img1_path
 from imm.cli._match import Matching, load_and_process_image
 from imm.utils.device import detect_device
 from imm.utils.warnings import suppress_warnings
-<<<<<<< HEAD:imm/tools/estimate.py
-=======
-from imm.geometry import Camera
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/cli/_estimate.py
 
 # Suppress warnings
 suppress_warnings()
@@ -53,7 +49,8 @@ def cli():
 @click.option("--max_keypoints", default=-1, type=int, help="Max keypoints to keep (-1 keeps all)")
 @click.option("--resize", default=640, type=int, help="Resize to max dimension")
 @click.option("--output", default="output", help="Directory for logs and visualization")
-@click.option("visualize", "--visualize", "--viz", is_flag=True, help="Show the matches")
+@click.option("show", "--show", is_flag=True, help="Show homography warp visualization")
+@click.option("--warp-alpha", default=0.5, type=float, help="Blending factor for warp visualization (0-1)")
 @click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
 @click.help_option("--help", "-h")
 def homography(
@@ -69,7 +66,8 @@ def homography(
     max_keypoints: int,
     resize: Optional[int],
     output: str,
-    visualize: bool,
+    show: bool,
+    warp_alpha: float,
     force_cpu: bool,
 ):
     """Estimate the homography transformation between two images."""
@@ -89,14 +87,11 @@ def homography(
     m_preds = matcher_model.match_images(image0, image1)
 
     # Get the estimator
-<<<<<<< HEAD:imm/tools/estimate.py
     h_estimator = create_homography_estimator(backend, solver, thd, max_iters, confidence)
-=======
     h_estimator = create_homography_estimator(
         backend, solver, reproj_thd, max_iters, confidence)
 
     # Estimate the transformation
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/cli/_estimate.py
     h_preds = h_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"])
 
     if h_preds["success"]:
@@ -112,21 +107,54 @@ def homography(
         matches = m_preds["matches"][m_valid][inliers]
         mscores = m_preds["mscores"][m_valid][inliers]
 
-        # Visualize the matches (lazy import so imm-gui / estimate without --visualize skip matplotlib)
-        if visualize:
-            from imm.viz import MatchVisualizer
+        from imm.viz import MatchVisualizer
 
-            vis = MatchVisualizer()
-            vis.draw_matches(
+        vis = MatchVisualizer()
+        vis.draw_matches(
+            image0_cv,
+            image1_cv,
+            m_preds["kpts0"],
+            m_preds["kpts1"],
+            mkpts0,
+            mkpts1,
+            matches=matches,
+            mscores=mscores,
+            show_image=False,
+        )
+
+        # Save results and visualization
+        if output:
+            output_dir = Path(output)
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save homography matrix
+            h_file = output_dir / "homography.npy"
+            np.save(h_file, H)
+            logger.info(f"Homography saved to {h_file}")
+
+            # Save visualization
+            viz_file = output_dir / "homography_matches.png"
+            vis.save(str(viz_file))
+            logger.info(f"Visualization saved to {viz_file}")
+
+        # Homography warp visualization
+        if show or output:
+            from imm.viz import HomographyVisualizer
+            warp_vis = HomographyVisualizer()
+            blended = warp_vis.draw_homography_warp(
                 image0_cv,
                 image1_cv,
-                m_preds["kpts0"],
-                m_preds["kpts1"],
-                mkpts0,
-                mkpts1,
-                matches=matches,
-                mscores=mscores,
+                H,
+                alpha=warp_alpha,
+                title="Homography Warp",
+                show_image=show,
             )
+
+            # Save warp visualization
+            if output:
+                warp_file = output_dir / "homography_warp.png"
+                warp_vis.save(str(warp_file))
+                logger.info(f"Warp visualization saved to {warp_file}")
 
         logger.info(f"Estimation successful: {H}")
 
@@ -151,7 +179,7 @@ def homography(
 @click.option("--max_keypoints", default=-1, type=int, help="Max keypoints to keep (-1 keeps all)")
 @click.option("--resize", default=640, type=int, help="Resize to max dimension")
 @click.option("--output", default="output", help="Directory for logs and visualization")
-@click.option("visualize", "--visualize", "--viz", is_flag=True, help="Show the matches")
+@click.option("show", "--show", is_flag=True, help="Show the matches")
 @click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
 @click.help_option("--help", "-h")
 def relative_pose(
@@ -167,7 +195,7 @@ def relative_pose(
     max_keypoints: int,
     resize: Optional[int],
     output: str,
-    visualize: bool,
+    show: bool,
     force_cpu: bool,
 ):
     """Estimate the relative pose between two images."""
@@ -183,13 +211,10 @@ def relative_pose(
     # h, w of the image0
     h, w = image0_cv.shape[:2]
 
-<<<<<<< HEAD:imm/tools/estimate.py
     # Get image dimensions
     camera0 = Camera.from_image(image0_cv)
     camera1 = Camera.from_image(image1_cv)
 
-=======
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/cli/_estimate.py
     # Match images
     matcher_model = Matching(matcher_name=matcher,
                              device=device, extractor_name=extractor,
@@ -200,14 +225,8 @@ def relative_pose(
     r_estimator = create_relative_pose_estimator(
         backend, solver, threshold, confidence, max_iters)
 
-<<<<<<< HEAD:imm/tools/estimate.py
     # Estimate
     r_preds = r_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
-=======
-    # Estimate the transformation
-    r_preds = r_estimator.estimate(
-        m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/cli/_estimate.py
 
     if r_preds["success"]:
         #
