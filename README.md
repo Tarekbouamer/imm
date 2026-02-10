@@ -132,25 +132,30 @@ ImMatch provides command-line tools for feature extraction, matching, and geomet
 
 ### Feature Extraction
 
-Use the `imm-extract` script to extract features from an image or a folder of images:
+Use the `imm-extract` script to extract features from an image or a dataset:
 
 ```bash
-# image
-imm-extract --model extractor --img_path /path/to/your/image.jpg --max_keypoints 1600
+# Single image
+imm-extract image /path/to/your/image.jpg --extractor superpoint --max_keypoints 1600 --output /path/to/output
 
-# dataset
-imm-extract --model extractor --img_path /path/to/your/dataset --output_dir /path/to/save/features --max_keypoints 1600
+# Dataset
+imm-extract dataset /path/to/your/dataset --extractor superpoint --output /path/to/save/features --max_keypoints 1600
 
   Options:
-    --model             Extractor name
-    --img_path          Path to the image or dataset
-    --output_dir        Path to save extracted features
+    --extractor         Extractor name (e.g., superpoint, xfeat_sparse)
     --max_keypoints     Maximum number of keypoints
+    --resize            Resize to max dimension
+    --output            Output directory for extracted features
     --batch_size        Batch size for dataset extraction
     --num_workers       Number of workers for DataLoader
+    --override          Override existing extracted features
+    --force_cpu         Force using CPU
 
-# example
-imm-extract --model superpoint --img_path assets/graffiti.png --max_keypoints 1600
+# Example - single image
+imm-extract image assets/graffiti.png --extractor superpoint --max_keypoints 1600 --show
+
+# Example - dataset
+imm-extract dataset assets/phototourism_sample_images --extractor superpoint --output output/features --max_keypoints 1024
 ```
 
 ### Feature Matching

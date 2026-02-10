@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from loguru import logger
+from omegaconf import DictConfig
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -31,7 +32,7 @@ class ModelBase(nn.Module):
     and model analysis.
     """
 
-    def __init__(self, cfg: Dict[str, Any]):
+    def __init__(self, cfg: Union[dict, DictConfig]):
         """
         Initialize the ModelBase.
 
@@ -60,7 +61,7 @@ class ModelBase(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        pass
+        raise NotImplementedError("forward method is not yet implemented.")
 
     def train_step(self, batch: Any) -> Dict[str, float]:
         """
@@ -137,7 +138,8 @@ class ModelBase(nn.Module):
             input_size (Optional[Tuple[int, ...]]): The size of the input tensor.
         """
         if summary is None:
-            logger.error("torchsummary is not installed. Please install it with 'pip install torchsummary'")
+            logger.error(
+                "torchsummary is not installed. Please install it with 'pip install torchsummary'")
             return
 
         if input_size is None:
@@ -146,7 +148,8 @@ class ModelBase(nn.Module):
         if input_size:
             summary(self, input_size=input_size)
         else:
-            logger.warning("Input shape not provided. Unable to generate summary.")
+            logger.warning(
+                "Input shape not provided. Unable to generate summary.")
 
     def get_flops(self, input_size: Tuple[int, ...]) -> int:
         """
@@ -159,7 +162,8 @@ class ModelBase(nn.Module):
             int: Estimated number of FLOPs.
         """
         if profile is None:
-            logger.error("thop library is not installed. Please install it with 'pip install thop'")
+            logger.error(
+                "thop library is not installed. Please install it with 'pip install thop'")
             return -1
 
         input = torch.randn(1, *input_size).to(self.get_device())
@@ -176,14 +180,16 @@ class ModelBase(nn.Module):
             input_size (Optional[Tuple[int, ...]]): The size of the input tensor.
         """
         if make_dot is None:
-            logger.error("torchviz library is not installed. Please install it with 'pip install torchviz'")
+            logger.error(
+                "torchviz library is not installed. Please install it with 'pip install torchviz'")
             return
 
         if input_size is None:
             input_size = self.cfg.get("input_shape")
 
         if input_size is None:
-            logger.error("Input shape not provided. Unable to generate architecture plot.")
+            logger.error(
+                "Input shape not provided. Unable to generate architecture plot.")
             return
 
         x = torch.randn(1, *input_size).to(self.get_device())
@@ -262,7 +268,8 @@ class ModelBase(nn.Module):
             RuntimeError: If CUDA is not available.
         """
         if not torch.cuda.is_available():
-            raise RuntimeError("CUDA is not available. Cannot move model to CUDA device.")
+            raise RuntimeError(
+                "CUDA is not available. Cannot move model to CUDA device.")
 
         if device is None:
             device = torch.cuda.current_device()

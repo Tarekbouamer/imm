@@ -1,7 +1,7 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import h5py
 import numpy as np
@@ -14,8 +14,8 @@ from imm.utils.device import to_numpy
 class H5Writer:
     """H5Writer is a class for writing data to an HDF5 file."""
 
-    def __init__(self, filename: str, mode: str = "a", compression: str = None, chunks: bool = True):
-        self.filename = filename
+    def __init__(self, filename: str | Path, mode: str = "a", compression: str = None, chunks: bool = True): # type: ignore
+        self.filename = str(filename)
         self.mode = mode
         self.compression = compression
         self.chunks = chunks
@@ -70,14 +70,14 @@ class FeaturesWriter(H5Writer):
 class MatchesWriter(H5Writer):
     """MatchesWriter is a class for writing matches to an HDF5 file."""
 
-    def __init__(self, filename: str, mode: str = "w", compression: str = None):
+    def __init__(self, filename: str|Path, mode: str = "w", compression: str = None): # type: ignore
         super().__init__(filename, mode, compression)
         logger.info(f"MatchesWriter initialized at {filename}")
 
     def write_matches(
         self,
         group_name: str,
-        matches: Dict[str, Union[torch.Tensor, np.ndarray]],
+        matches: Dict[str, Any],
     ) -> None:
         """Writes matches data to an HDF5 group."""
         try:

@@ -1,52 +1,15 @@
-from typing import Dict, Optional, Union
 
 import cv2
 import numpy as np
 from loguru import logger
 
-<<<<<<< HEAD
-from imm.estimators._camera import Camera
-from imm.estimators.estimator import Estimator
-from imm.utils.check import CHECK_SHAPE, CHECK_TYPE
-=======
 from imm.geometry import Camera
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
-from ._conversions import convert_points_from_homogeneous, essential_from_Rt
-from ._helper import get_backend
-
-try:
-    import pycolmap
-except ImportError:
-    pycolmap = None
-    logger.warning("Pycolmap not found. PycolmapPnPEstimator will not work.")
-
-try:
-    import poselib
-except ImportError:
-    poselib = None
-    logger.warning("PoseLib not found. PoseLibPnPEstimator will not work.")
-
-try:
-    import cv2
-except ImportError:
-    cv2 = None
-    logger.warning("OpenCV not found. OpenCVPnPEstimator will not work.")
-
-CV_RP_SOLVERS = {
     "ransac": cv2.RANSAC,
     "usac_magsac": cv2.USAC_MAGSAC,
 }
 
 
-class OpenCVRelativePoseEstimator(Estimator):
-    """Estimate the relative pose between two images using OpenCV.
-
-    Args:
-        solver (str): Solver method to use. Default is "ransac".
-        threshold (float): Maximum reprojection error threshold. Default is 1.0.
-        confidence (float): Confidence level. Default is 0.999.
-        max_iters (int): Maximum number of iterations. Default is 1000.
     """
 
     def __init__(
@@ -55,16 +18,11 @@ class OpenCVRelativePoseEstimator(Estimator):
         threshold: float = 1.0,
         confidence: float = 0.999,
         max_iters: int = 1000,
+        **kwargs: Any,
     ):
-<<<<<<< HEAD
-        super().__init__()
-        if solver not in CV_RP_SOLVERS:
-            raise ValueError(f"Invalid solver: {solver}. Valid options are: {list(CV_RP_SOLVERS.keys())}")
-=======
         if solver not in CV_SOLVERS:
             raise ValueError(
                 f"Invalid solver: {solver}. Valid options are: {list(CV_SOLVERS.keys())}")
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
         self.solver = solver
         self.threshold = threshold
@@ -75,10 +33,6 @@ class OpenCVRelativePoseEstimator(Estimator):
         self,
         pts0: np.ndarray,
         pts1: np.ndarray,
-        camera0: Optional[Camera] = None,
-        camera1: Optional[Camera] = None,
-    ) -> Dict[str, Union[np.ndarray, int, bool]]:
-        """Estimate the relative pose between two sets of 2D points.
 
         Args:
             pts0 (np.ndarray): 2D points in the first image, shape (N, 2).
@@ -102,34 +56,12 @@ class OpenCVRelativePoseEstimator(Estimator):
         CHECK_SHAPE(pts0, (-1, 2))
         CHECK_SHAPE(pts1, (-1, 2))
 
+        R = np.full((3, 3), np.nan)
+        t = np.full((3, 1), np.nan)
+
         try:
             # Five correspondences
             if pts0.shape[0] < 5:
-<<<<<<< HEAD
-                logger.warning(f"Number of correspondences is less than 5: {pts0.shape[0]}.")
-                return {
-                    "success": False,
-                    "E": None,
-                    "R": None,
-                    "t": None,
-                    "inliers": None,
-                    "num_inliers": 0,
-                }
-
-            # Normalize the points
-            pts0 = camera0.image2camera(pts0)
-            pts1 = camera1.image2camera(pts1)
-=======
-                logger.warning(
-                    f"Number of correspondences is less than 5: {pts0.shape[0]}.")
-                return {"success": False, "R": None, "t": None, "inliers": None, "num_inliers": 0}
-
-            # Undistort points if camera matrices are provided
-            pts0 = cv2.undistortPoints(
-                pts0, camera0, distCoeffs=distCoeffs).reshape(-1, 2)
-            pts1 = cv2.undistortPoints(
-                pts1, camera1, distCoeffs=distCoeffs).reshape(-1, 2)
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
             # Normalize the threshold
             f_mean = np.array([camera0.fx, camera1.fx]).mean().item()
@@ -138,59 +70,40 @@ class OpenCVRelativePoseEstimator(Estimator):
             # Convert to homogeneous coordinates
             pts0 = convert_points_from_homogeneous(pts0)
             pts1 = convert_points_from_homogeneous(pts1)
+            f_mean = float(
+                np.mean([camera0.fx, camera0.fy, camera1.fx, camera1.fy]))
+            norm_thresh = self.threshold / max(f_mean, 1e-12)
 
-            # Compute the essential matrix
+            # To Camera coordinates
+            c_pts0 = camera0.image2cam(pts0)
+            c_pts1 = camera1.image2cam(pts1)
+
+            # Normalize
+            pts0n = from_homogeneous(c_pts0)
+            pts1n = from_homogeneous(c_pts1)
+
+            # Convert to float32 numpy arrays for OpenCV
+            pts0n = np.asarray(pts0n, dtype=np.float32)
+            pts1n = np.asarray(pts1n, dtype=np.float32)
+
+            # Essential matrix estimation
             E, mask = cv2.findEssentialMat(
-                pts0,
-                pts1,
-                cameraMatrix=np.eye(3),
-                method=CV_RP_SOLVERS[self.solver],
-                threshold=norm_threshold,
                 prob=self.confidence,
+                method=CV_SOLVERS[self.solver],
                 maxIters=self.max_iters,
             )
+            print("Essential matrix:\n", E)
+            if E is None or mask is None:
+                return RelativePoseResult(
+                    success=False, R=np.full((3, 3), np.nan), t=np.full((3, 1), np.nan), inliers=np.array([]), num_inliers=0)
 
-            if E is None:
-                logger.warning("Essential matrix computation failed.")
-                return {
-                    "success": False,
-                    "E": None,
-                    "R": None,
-                    "t": None,
-                    "inliers": None,
-                    "num_inliers": 0,
-                }
 
-            # Recover the relative pose (R and t)
-            _, R, t, mask_recover = cv2.recoverPose(
-                E, pts0, pts1, cameraMatrix=np.eye(3), mask=mask)
+            inliers = mask.reshape(-1).astype(bool)
 
-            return {
-                "success": True,
-                "E": E,
-                "R": R,
-                "t": t,
-                "inliers": mask.reshape(-1).astype(bool),
-                "num_inliers": int(mask_recover.sum()),
-            }
-
-        except Exception as e:
-            logger.error(
-                f"Error in {self.__class__.__name__}: {e}, Input shapes pts0: {pts0.shape}, pts1: {pts1.shape}"
-            )
-            return {
-                "success": False,
-                "E": None,
-                "R": None,
-                "t": None,
-                "inliers": None,
-                "num_inliers": 0,
-            }
 
     def __repr__(self):
         return (
             f"{self.__class__.__name__}("
-            f"solver='{self.solver}', "
             f"threshold={self.threshold}, "
             f"confidence={self.confidence}, "
             f"max_iters={self.max_iters})"

@@ -21,7 +21,6 @@ from imm.utils.device import detect_device
 from imm.utils.logger import set_log_dir
 from imm.utils.warnings import suppress_warnings
 from imm.viz import EpipolarVisualizer, HomographyVisualizer, MatchVisualizer
-suppress_warnings()
 
 
 @click.group()
@@ -90,10 +89,10 @@ def homography(
     image1, image1_cv = load_and_process_image(img1_path, resize, device)
 
     # Match images
-    matcher: Matching = Matching(matcher_name=matcher,
-                                 device=device, extractor_name=extractor,
-                                 max_keypoints=max_keypoints)
-    m_preds = matcher.match_images(image0, image1)
+    matching: Matching = Matching(matcher_name=matcher,
+                                  device=device, extractor_name=extractor,
+                                  max_keypoints=max_keypoints)
+    m_preds = matching.match_images(image0, image1)
 
     # Get the estimator
     h_estimator = create_homography_estimator(
@@ -227,36 +226,20 @@ def relative_pose(
     camera1 = Camera.from_image(image1_cv)
 
     # Match images
-    matcher: Matching = Matching(matcher_name=matcher,
-                                 device=device, extractor_name=extractor,
-                                 max_keypoints=max_keypoints)
-    m_preds = matcher.match_images(image0, image1)
+    matching: Matching = Matching(matcher_name=matcher,
+                                  device=device, extractor_name=extractor,
+                                  max_keypoints=max_keypoints)
+    m_preds = matching.match_images(image0, image1)
 
-    # Get the estimator
-    try:
-        r_estimator = create_relative_pose_estimator(
-            backend, solver, threshold, confidence, max_iters)
-    except Exception as e:
-        sys.exit(1)
-
-    # Estimate
-    r_preds = r_estimator.estimate(
+    # Estimator
+    estimator = create_relative_pose_estimator(
+        backend, solver, threshold, confidence, max_iters)
+    r_preds = estimator.estimate(
         m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
 
     if r_preds["success"]:
         R, t = r_preds["R"], r_preds["t"]
         inliers = r_preds["inliers"]
-
-        # Filter out the inliers
-        mkpts0 = m_preds["mkpts0"][inliers]
-        mkpts1 = m_preds["mkpts1"][inliers]
-
-        m_valid = np.where(m_preds["matches"] > -1)[0]
-
-        matches = m_preds["matches"][m_valid][inliers]
-        mscores = m_preds["mscores"][m_valid][inliers]
-
-        # Visualize the matches
         vis = MatchVisualizer()
         vis.draw_matches(
             image0_cv,
@@ -271,6 +254,7 @@ def relative_pose(
         )
 
         # Epipolar geometry visualization
+        # Epipolar visualization
         epi_vis = EpipolarVisualizer()
         epi_vis.draw_epipolar_lines(
             image0_cv,
@@ -283,7 +267,6 @@ def relative_pose(
             camera1,
             inliers=inliers,
             n_lines=n_lines,
-            title="Relative Pose - Epipolar Geometry",
             show_image=show,
         )
 
@@ -295,18 +278,11 @@ def relative_pose(
         epi_vis.save(str(viz_file))
         logger.info(f"Epipolar visualization saved to {viz_file}")
 
-        # Save matches visualization
-        matches_file = output_dir / "pose_matches.png"
-        vis.save(str(matches_file))
-        logger.info(f"Matches visualization saved to {matches_file}")
+        logger.info(f"Estimation successful: {R}, {t}")
 
-        # Save relative pose
-        pose_file = output_dir / "relative_pose.npz"
-        np.savez(pose_file, R=R, t=t, inliers=inliers)
-        logger.info(f"Relative pose saved to {pose_file}")
-
-        logger.info(
-            f"Estimation successful: R shape={R.shape}, t shape={t.shape}")
+        if inliers is not None:
+            logger.info(
+                f"Inliers: {inliers.sum()}/{len(inliers)}")
 
     else:
         logger.error("Estimation failed")

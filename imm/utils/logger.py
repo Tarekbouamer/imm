@@ -7,7 +7,7 @@ from loguru import logger
 def setup_logger(
     app_name,
     log_dir="logs",
-    file_rotation="1 MB",
+    file_rotation="10 MB",
     file_level="DEBUG",
     console_level="INFO",
 ):
@@ -16,7 +16,7 @@ def setup_logger(
 
     Parameters:
     - app_name: The name of the application to include in log messages.
-    - log_dir: The directory where log files will be stored.
+    - log_dir: The directory where log files will be stored (can be Path or str).
     - file_rotation: The rotation policy for the log files.
     - file_level: The logging level for the file logger.
     - console_level: The logging level for the console logger.
@@ -28,12 +28,19 @@ def setup_logger(
     log_path.mkdir(parents=True, exist_ok=True)
 
     # Construct log file path based on app_name
-    log_file = log_path / f"{app_name}_{{time}}.log"
+    log_file = log_path / f"{app_name}.log"
 
     # Define log message formats
     console_format = f"<green>{{time:YYYY-MM-DD HH:mm:ss}}</green> | <level>{{level: <8}}</level> | <cyan>{app_name}</cyan> | <level>{{message}}</level>"
     file_format = f"{{time:YYYY-MM-DD HH:mm:ss}} | {{level: <8}} | {app_name} | {{message}}"
 
     # Configure loggers
-    logger.add(log_file, rotation=file_rotation, level=file_level, format=file_format)  # Log to a file with rotation
-    logger.add(sys.stdout, level=console_level, format=console_format)  # Log to stdout
+    logger.add(log_file, rotation=file_rotation, level=file_level,
+               format=file_format)  # Log to a file with rotation
+    logger.add(sys.stdout, level=console_level,
+               format=console_format)  # Log to stdout
+
+
+def set_log_dir(log_dir, app_name="imm"):
+    """Reconfigure logger to save logs to a different directory."""
+    setup_logger(app_name=app_name, log_dir=log_dir)

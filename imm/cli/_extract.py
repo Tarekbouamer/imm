@@ -21,6 +21,7 @@ from imm.data import ImagesFromList
 from imm.extractors._helper import create_extractor
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
+from imm.utils.logger import set_log_dir
 from imm.utils.manifest import save_extraction_manifest
 from imm.viz import KeypointVisualizer
 from imm.writers import FeaturesWriter
@@ -92,7 +93,7 @@ class Extraction:
         logger.info(f"Initialized {extractor} extractor on {device}")
 
     @torch.inference_mode()
-    def extract_image(self, data: Mapping[str, Any]) -> Dict[str, Any]:
+    def extract_image(self, data: Mapping[str, Any]) -> Any:
         """
         Extracts features from a single input.
 
@@ -102,7 +103,8 @@ class Extraction:
         Returns:
             Dictionary of extracted features as numpy arrays
         """
-        data = to_cuda(data) if self.device == "cuda" else to_cpu(data)
+        data = to_cuda(data) if self.device == "cuda" else to_cpu(
+            data)  # type: ignore
         preds = self.extractor.extract(data)
         return to_numpy(preds)
 
@@ -242,7 +244,7 @@ class Extraction:
 
 
 def extract_image(
-    img_path: str,
+    img_path: str | Path,
     extractor: str,
     max_keypoints: int,
     resize: int,
@@ -262,6 +264,13 @@ def extract_image(
         force_cpu: Force CPU usage
     """
     device = detect_device(force_cpu)
+
+    # Configure logging to output directory
+    if output:
+        output_dir = Path(output)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        set_log_dir(log_dir=output_dir, app_name="extract")
+
     extraction = Extraction(extractor=extractor, extractor_cfg={
         "max_keypoints": max_keypoints}, device=device)
 
@@ -289,7 +298,10 @@ def extract_image(
 
     # Visualize keypoints
     visualizer = KeypointVisualizer()
-    visualizer.draw_keypoints(image_cv, kpts, scores, show_image=show)
+    if kpts is not None:
+        visualizer.draw_keypoints(image_cv, kpts, scores, show_image=show)
+    else:
+        logger.warning("No keypoints detected in image")
 
     if output:
         output_dir = Path(output)
@@ -328,15 +340,19 @@ def extract_dataset(
         force_cpu: Force CPU usage
     """
     device = detect_device(force_cpu)
+
+    # Configure logging to output directory
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    set_log_dir(log_dir=output_dir, app_name="extract")
+
     extraction = Extraction(extractor=extractor, extractor_cfg={
         "max_keypoints": max_keypoints}, device=device)
 
     # Create a dataset from the directory
-    dataset = ImagesFromList(Path(dataset_dir), resize=resize)
+    dataset = ImagesFromList(dataset_dir, resize=resize)
 
     # Set up save path for dataset features
-    output_dir = Path(output)
-    output_dir.mkdir(parents=True, exist_ok=True)
     save_path = output_dir / "features.h5"
 
     # Extract features from the dataset

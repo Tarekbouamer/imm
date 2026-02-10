@@ -11,12 +11,6 @@
     "editor.tabSize": 4,
     "todo-tree.general.showActivityBarBadge": true,
     "workbench.tree.indent": 15,
-    "python.analysis.typeCheckingMode": "off",
-<<<<<<< HEAD
-    "cSpell.enabled": true,
-    "python.analysis.autoImportCompletions": true,
-
-=======
-    "cSpell.enabled": false,
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
+    "python.analysis.typeCheckingMode": "basic",
+    "cSpell.enabled": false
 }

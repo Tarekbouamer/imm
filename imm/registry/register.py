@@ -70,7 +70,7 @@ class ModelRegistry:
     def create_model(
         self,
         name: str,
-        cfg: Optional[Dict[str, Any]] = None,
+        cfg: dict = {},
         pretrained: bool = True,
         **kwargs,
     ) -> nn.Module:

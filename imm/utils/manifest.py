@@ -4,9 +4,10 @@ import platform
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import torch
+from torch import version as torch_version
 
 import imm
 
@@ -30,7 +31,7 @@ def get_environment_info() -> dict[str, Any]:
     env["cuda_available"] = cuda_available
 
     if cuda_available:
-        env["cuda_version"] = torch.version.cuda
+        env["cuda_version"] = torch_version.cuda
         env["gpu_count"] = torch.cuda.device_count()
         env["gpus"] = [
             {
@@ -46,7 +47,7 @@ def get_environment_info() -> dict[str, Any]:
     return env
 
 
-def calculate_stats(values: list[float | int]) -> dict[str, float]:
+def calculate_stats(values: Sequence[float | int]) -> dict[str, float]:
     """Calculate min/max/avg statistics.
     """
     if not values:

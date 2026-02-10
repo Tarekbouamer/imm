@@ -81,7 +81,7 @@ def register_model(fn):
     if hasattr(mod, "__all__"):
         mod.__all__.append(model_name)
     else:
-        mod.__all__ = [model_name]
+        setattr(mod, "__all__", [model_name])
 
     _model_entrypoints[model_name] = fn
     _model_to_module[model_name] = module_name

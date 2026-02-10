@@ -1,7 +1,7 @@
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import click
 import h5py
@@ -17,13 +17,14 @@ from imm.matchers._helper import create_matcher
 from imm.utils.data import extend_keys_with_suffix
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
+from imm.utils.logger import set_log_dir
 from imm.utils.manifest import create_matching_manifest
 from imm.utils.warnings import suppress_warnings
 from imm.viz.viz2d import MatchVisualizer
 from imm.writers import AsyncMatchesWriter, MatchesWriter
 
 
-def filter_existing_matches(dataset, matches_file: Path, manifest_path: Path):
+def filter_existing_matches(dataset, matches_file: Path, manifest_path: Path) -> tuple:
     """Read existing matches and filter dataset to skip already matched pairs.
     """
     # Read existing matches from HDF5 file
@@ -101,7 +102,7 @@ def parse_pairs_file(pairs_file: Path) -> List[Tuple[str, str]]:
 
 
 def load_and_process_image(
-    image_path: str, resize: Optional[int], device: str
+    image_path: str | Path, resize: Optional[int], device: str
 ) -> Tuple[torch.Tensor, np.ndarray]:
     """Load and process an image."""
     logger.debug(f"Loading image: {image_path}")
@@ -113,7 +114,7 @@ class Matching:
     def __init__(
         self,
         matcher_name: str = "superglue_outdoor",
-        extractor_name: str = "superpoint",
+        extractor_name: str | None = "superpoint",
         max_keypoints: int = -1,
         device: Optional[str] = None,
         match_thd: float = 0.0,
@@ -141,6 +142,10 @@ class Matching:
         logger.info(f"Initialized {extractor_name} extractor on {self.device}")
 
     def extract_features(self, image: torch.Tensor, suffix: str) -> Dict[str, Any]:
+
+        if self.extractor is None:
+            raise ValueError("Extractor is required but was not initialized")
+
         logger.info(f"Extracting features for image{suffix}")
         preds = self.extractor.extract({"image": image})
         preds = extend_keys_with_suffix(preds, suffix)
@@ -149,14 +154,15 @@ class Matching:
         return preds
 
     @torch.inference_mode()
-    def match_features(self, data: Dict[str, Union[torch.Tensor, List, Tuple]], match_thd: float = 0.0) -> Dict:
+    def match_features(self, data: Dict[str, Any], match_thd: float = 0.0) -> Dict[str, Any]:
         """Matches a pair of descriptors or raw images."""
-        data = to_cuda(data) if self.device == "cuda" else to_cpu(data)
+        data = to_cuda(data) if self.device == "cuda" else to_cpu(
+            data)  # type: ignore
         preds = self.matcher.match(data)
         preds = to_numpy(preds)
         return self.filter_matches(preds, match_thd)
 
-    def filter_matches(self, preds: Dict[str, np.ndarray], match_thd: float) -> Dict[str, np.ndarray]:
+    def filter_matches(self, preds: Dict[str, np.ndarray], match_thd: float) -> Dict:
         if match_thd <= 0:
             return preds
         else:
@@ -477,8 +483,8 @@ def cli():
 @click.help_option("--help", "-h")
 @suppress_warnings()
 def match_pair(
-    img0_path: str,
-    img1_path: str,
+    img0_path: str,  # type: ignore
+    img1_path: str,  # type: ignore
     matcher: str,
     extractor: str,
     max_keypoints: int,
@@ -491,20 +497,33 @@ def match_pair(
     """Match a pair of images."""
     device = detect_device(force_cpu)
 
-    img0_path = Path(img0_path)
-    img1_path = Path(img1_path)
+    # Configure logging to output directory
+    if output:
+        output_dir = Path(output)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        set_log_dir(log_dir=output_dir, app_name="match")
+
+    img0_path: Path = Path(img0_path)
+    img1_path: Path = Path(img1_path)
 
     image0, image0_cv = load_and_process_image(img0_path, resize, device)
     image1, image1_cv = load_and_process_image(img1_path, resize, device)
 
-    matcher: Matching = Matching(matcher_name=matcher, extractor_name=extractor,
-                                 max_keypoints=max_keypoints, device=device)
+    matching: Matching = Matching(matcher_name=matcher, extractor_name=extractor,
+                                  max_keypoints=max_keypoints, device=device)
 
-    matches = matcher.match_images(image0, image1, match_thd=match_thd)
+    m_preds = matching.match_images(image0, image1, match_thd=match_thd)
 
     visualizer = MatchVisualizer()
-    visualizer.draw_matches(image0_cv, image1_cv, **
-                            matches, title="Matches", show_image=show)
+    visualizer.draw_matches(image0_cv,
+                            image1_cv,
+                            image0_cv,
+                            image1_cv,
+                            m_preds["kpts0"],
+                            m_preds["kpts1"],
+                            m_preds["mkpts0"],
+                            m_preds["mkpts1"],
+                            title="Matches", show_image=show)
 
     if output:
         output_dir = Path(output)
@@ -549,13 +568,18 @@ def match_images(
     """Match multiple image pairs from directory."""
     device = detect_device(force_cpu)
 
+    # Configure logging to output directory
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    set_log_dir(log_dir=output_dir, app_name="match")
+
     images_dir_path = Path(images_dir)
     pairs_path = Path(pairs)
 
     pairs_data = parse_pairs_file(pairs_path)
     dataset = ImagePairsDataset(images_dir_path, pairs_data, resize=resize)
 
-    matcher: Matching = Matching(
+    matching: Matching = Matching(
         matcher_name=matcher,
         extractor_name=extractor,
         max_keypoints=max_keypoints,
@@ -563,7 +587,7 @@ def match_images(
         match_thd=match_thd
     )
 
-    matcher.match_sequence_images(
+    matching.match_sequence_images(
         dataset=dataset,
         save_path=Path(output),
         batch_size=batch_size,
@@ -600,6 +624,11 @@ def match_features(
     """Match from pre-extracted features file."""
     device = detect_device(force_cpu)
 
+    # Configure logging to output directory
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    set_log_dir(log_dir=output_dir, app_name="match")
+
     features_path_obj = Path(features_path)
     pairs_path = Path(pairs)
 
@@ -610,14 +639,14 @@ def match_features(
     pairs_data = parse_pairs_file(pairs_path)
     dataset = FeaturesPairsDataset(features_path_obj, pairs_data)
 
-    matcher: Matching = Matching(
+    matching: Matching = Matching(
         matcher_name=matcher,
         extractor_name=None,
         max_keypoints=-1,
         device=device
     )
 
-    matcher.match_sequence_features(
+    matching.match_sequence_features(
         dataset=dataset,
         save_path=Path(output),
         batch_size=batch_size,

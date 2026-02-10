@@ -266,6 +266,14 @@
 │  │  save_manifest(manifest, output_path)                      │    │
 │  └────────────────────────────────────────────────────────────┘    │
 │                                                                      │
+│  HDF5 Readers (Datasets)                                            │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │ Thread-safe HDF5 access:                                   │    │
+│  │  - Lazy open per thread in dataset readers                 │    │
+│  │  - Reuse handles within thread for __getitem__ calls       │    │
+│  │  - Avoid cross-thread file handle sharing                  │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
 │  Caching & Performance                                             │
 │  ┌────────────────────────────────────────────────────────────┐    │
 │  │ Feature Cache (optional):                                  │    │

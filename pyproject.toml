@@ -28,7 +28,7 @@ Tracker = "https://github.com/Tarekbouamer/imm/issues"
 
 [project.entry-points.console_scripts]
 imm-match = "imm.cli._match:cli"
-imm-extract = "imm.cli._extract:extract"
+imm-extract = "imm.cli._extract:cli"
 imm-estimate = "imm.cli._estimate:cli"
 imm-gui = "imm.ui:main"
 imm-download = "imm.cli._download:download"
@@ -37,8 +37,6 @@ imm-optimize = "imm.cli._optimize:cli"
 
 [project.optional-dependencies]
 extra = [
-    "pycolmap==0.4.0",
-    "poselib @ git+https://github.com/PoseLib/PoseLib.git@9c8f3ca1baba69e19726cc7caded574873ec1f9e",
 ]
 dev = ["black>=22.0", "flake8>=4.0", "isort>=5.0"]
 docs = ["sphinx>=4.0", "sphinx-rtd-theme>=0.5"]

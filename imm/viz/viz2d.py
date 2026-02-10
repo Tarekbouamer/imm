@@ -6,6 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
+from matplotlib.colors import Normalize
 
 from imm.utils.io import read_image
 
@@ -119,7 +120,7 @@ class KeypointVisualizer(Viz2D):
                 raise ValueError(
                     "Keypoints and scores must have the same length")
             cmap = plt.get_cmap("coolwarm")
-            norm = plt.Normalize(0, 1)
+            norm = Normalize(0, 1)
             for kp, score in zip(keypoints, scores):
                 color = cmap(norm(score))[:3]
                 color = (
@@ -160,9 +161,9 @@ class MatchVisualizer(Viz2D):
         mkpts1: np.ndarray,
         matches: Optional[np.ndarray] = None,
         mscores: Optional[np.ndarray] = None,
-        color_inliers: Optional[Tuple[int, int, int]] = (0, 0, 255),
-        color_outliers: Optional[Tuple[int, int, int]] = (255, 0, 0),
-        color_lines: Optional[Tuple[int, int, int]] = (0, 255, 0),
+        color_inliers: Tuple[int, int, int] = (0, 0, 255),
+        color_outliers: Tuple[int, int, int] = (255, 0, 0),
+        color_lines: Tuple[int, int, int] = (0, 255, 0),
         offset: int = 10,
         title: str = "Matches",
         show_image: bool = True,
@@ -357,3 +358,193 @@ class HomographyVisualizer(Viz2D):
             plt.show()
 
         return blended
+
+
+class EpipolarVisualizer(Viz2D):
+    """Visualizer for epipolar geometry from relative pose."""
+
+    def __init__(self):
+        super().__init__()
+
+    def draw_epipolar_lines(
+        self,
+        image0: Union[np.ndarray, str, Path],
+        image1: Union[np.ndarray, str, Path],
+        pts0: np.ndarray,
+        pts1: np.ndarray,
+        R: np.ndarray,
+        t: np.ndarray,
+        camera0,
+        camera1,
+        inliers: Optional[np.ndarray] = None,
+        n_lines: int = 4,
+        title: str = "Epipolar Geometry",
+        show_image: bool = True,
+    ) -> np.ndarray:
+        """Draw epipolar lines showing geometric constraints from relative pose.
+
+        Args:
+            image0: First image
+            image1: Second image
+            pts0: Keypoints in first image (N, 2)
+            pts1: Keypoints in second image (N, 2)
+            R: Rotation matrix (3x3) from camera0 to camera1
+            t: Translation vector (3x1) from camera0 to camera1
+            camera0: Camera intrinsics for first image
+            camera1: Camera intrinsics for second image
+            inliers: Boolean mask of inlier matches
+            n_lines: Number of epipolar lines to draw
+            title: Visualization title
+            show_image: Whether to display the image
+
+        Returns:
+            Composite image with epipolar lines
+        """
+        image0, _ = read_image(image0)
+        image1, _ = read_image(image1)
+
+        # Compute fundamental matrix from essential matrix
+        # E = [t]_x @ R, F = K1^-T @ E @ K0^-1
+        E = self._skew(t.reshape(3)) @ R
+        K0 = camera0.K()
+        K1 = camera1.K()
+        F = np.linalg.inv(K1).T @ E @ np.linalg.inv(K0)
+
+        # Compute rotation angle and translation
+        angle_deg = self._rotation_angle(R)
+        t_norm = t.reshape(3) / (np.linalg.norm(t) + 1e-8)
+
+        # Select points to visualize
+        if inliers is not None:
+            inlier_idx = np.where(inliers)[0]
+        else:
+            inlier_idx = np.arange(len(pts0))
+
+        # Create composite image
+        composite = self.draw_composite_image(image0, image1, offset=10)
+        h0, w0 = image0.shape[:2]
+        h1, w1 = image1.shape[:2]
+
+        # Select n_lines random inlier points to visualize
+        if len(inlier_idx) > 0:
+            # Pick n_lines random inliers (or all if fewer available)
+            n_points = min(n_lines, len(inlier_idx))
+            show_indices = np.random.choice(
+                inlier_idx, n_points, replace=False)
+
+            # Generate distinct colors for each line
+            colors = self._generate_colors(n_points)
+
+            for i, show_idx in enumerate(show_indices):
+                pt0 = pts0[show_idx]
+                pt1 = pts1[show_idx]
+                color = colors[i]
+
+                # Compute epipolar line in image1
+                pt0_h = np.array([pt0[0], pt0[1], 1.0])
+                line1 = F @ pt0_h
+
+                # Draw epipolar line on image1
+                self._draw_epiline(composite, line1, w0 + 10, w1, h1, color)
+
+                # Draw the point in image0
+                cv2.circle(composite, (int(pt0[0]), int(pt0[1])), 8, color, -1)
+                cv2.circle(composite, (int(pt0[0]), int(
+                    pt0[1])), 10, (255, 255, 255), 2)
+
+                # Draw the corresponding matched point in image1
+                pt1_x = int(pt1[0]) + w0 + 10
+                pt1_y = int(pt1[1])
+                cv2.circle(composite, (pt1_x, pt1_y), 8, color, -1)
+                cv2.circle(composite, (pt1_x, pt1_y), 10, (255, 255, 255), 2)
+
+        # Add text overlay with pose information
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.7
+        thickness = 2
+        y_offset = 30
+
+        info_lines = [
+            f"Rotation: {angle_deg:.2f} deg",
+            f"Translation: [{t_norm[0]:.3f}, {t_norm[1]:.3f}, {t_norm[2]:.3f}]",
+            f"Inliers: {len(inlier_idx)}/{len(pts0)}"
+        ]
+
+        for i, line_text in enumerate(info_lines):
+            y_pos = y_offset + i * 30
+            cv2.putText(composite, line_text, (10, y_pos), font,
+                        font_scale, (0, 255, 0), thickness)
+            cv2.putText(composite, line_text, (10, y_pos),
+                        font, font_scale, (0, 0, 0), 1)
+
+        self.results = composite
+
+        if show_image:
+            self.draw_image(composite, title, show_image=True)
+
+        return composite
+
+    @staticmethod
+    def _skew(v: np.ndarray) -> np.ndarray:
+        """Create skew-symmetric matrix from vector."""
+        return np.array([
+            [0, -v[2], v[1]],
+            [v[2], 0, -v[0]],
+            [-v[1], v[0], 0]
+        ])
+
+    @staticmethod
+    def _rotation_angle(R: np.ndarray) -> float:
+        """Compute rotation angle in degrees from rotation matrix."""
+        trace = np.trace(R)
+        angle_rad = np.arccos(np.clip((trace - 1) / 2, -1.0, 1.0))
+        return np.degrees(angle_rad)
+
+    @staticmethod
+    def _generate_colors(n: int) -> list:
+        """Generate n distinct colors using HSV color space."""
+        colors = []
+        for i in range(n):
+            hue = int(180 * i / n)  # Distribute hues evenly
+            color_hsv = np.array([[[hue, 255, 255]]], dtype=np.uint8)
+            color_bgr = cv2.cvtColor(color_hsv, cv2.COLOR_HSV2BGR)
+            colors.append(tuple(int(c) for c in color_bgr[0][0]))
+        return colors
+
+    @staticmethod
+    def _draw_epiline(img: np.ndarray, line: np.ndarray, x_offset: int, w: int, h: int, color: Tuple[int, int, int]):
+        """Draw epipolar line on image, clipped to image boundaries."""
+        a, b, c = line
+
+        # Compute intersections with image boundaries
+        points = []
+
+        # Left boundary (x = 0)
+        if abs(b) > 1e-6:
+            y = (-c) / b
+            if 0 <= y < h:
+                points.append((0, int(y)))
+
+        # Right boundary (x = w-1)
+        if abs(b) > 1e-6:
+            y = (-a * (w - 1) - c) / b
+            if 0 <= y < h:
+                points.append((w - 1, int(y)))
+
+        # Top boundary (y = 0)
+        if abs(a) > 1e-6:
+            x = (-c) / a
+            if 0 <= x < w:
+                points.append((int(x), 0))
+
+        # Bottom boundary (y = h-1)
+        if abs(a) > 1e-6:
+            x = (-b * (h - 1) - c) / a
+            if 0 <= x < w:
+                points.append((int(x), h - 1))
+
+        # Draw line between first two valid intersection points
+        if len(points) >= 2:
+            pt1 = (points[0][0] + x_offset, points[0][1])
+            pt2 = (points[1][0] + x_offset, points[1][1])
+            cv2.line(img, pt1, pt2, color, 2)

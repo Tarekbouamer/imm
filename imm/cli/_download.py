@@ -9,11 +9,11 @@ from imm.registry.factory import download_model_weights
 
 
 @click.command()
-@click.option("--name", type=str, required=False, help="Model name to download")
+@click.option("--model", type=str, required=False, help="Model name to download")
 @click.option("--all", "download_all", is_flag=True, help="Download all models")
 @click.option("--path", type=str, default="hub", help="Directory to save weights (default: hub)")
 @click.help_option("--help", "-h")
-def download(name, download_all, path):
+def download(model, download_all, path):
     """Download pretrained model weights for IMM extractors and matchers."""
 
     try:
@@ -26,10 +26,10 @@ def download(name, download_all, path):
             for model_name in all_models:
                 try:
                     if EXTRACTORS_REGISTRY.is_model(model_name):
-                        cfg = EXTRACTORS_REGISTRY.get_defaultmerge_config(
+                        cfg = EXTRACTORS_REGISTRY.get_default_config(
                             model_name)
                     else:
-                        cfg = MATCHERS_REGISTRY.get_defaultmerge_config(
+                        cfg = MATCHERS_REGISTRY.get_default_config(
                             model_name)
                     download_model_weights(model_name, cfg, path)
                     success += 1
@@ -43,20 +43,20 @@ def download(name, download_all, path):
                 logger.warning(f"Failed: {failed}")
 
         else:
-            if not name:
-                logger.error("Please provide --name")
+            if not model:
+                logger.error("Please provide --model")
                 sys.exit(1)
 
-            if EXTRACTORS_REGISTRY.is_model(name):
-                cfg = EXTRACTORS_REGISTRY.get_defaultmerge_config(name)
-            elif MATCHERS_REGISTRY.is_model(name):
-                cfg = MATCHERS_REGISTRY.get_defaultmerge_config(name)
+            if EXTRACTORS_REGISTRY.is_model(model):
+                cfg = EXTRACTORS_REGISTRY.get_default_config(model)
+            elif MATCHERS_REGISTRY.is_model(model):
+                cfg = MATCHERS_REGISTRY.get_default_config(model)
             else:
-                logger.error(f"Model not found: {name}")
+                logger.error(f"Model not found: {model}")
                 sys.exit(1)
 
-            download_model_weights(name, cfg, path)
-            logger.success(f"Downloaded {name}")
+            download_model_weights(model, cfg, path)
+            logger.success(f"Downloaded {model}")
 
     except Exception as e:
         logger.error(f"Download failed: {e}")

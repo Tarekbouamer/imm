@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -80,8 +80,7 @@ class MatcherModel(ModelBase):
     def match(
         self,
         data: Dict[str, Any],
-        process_fn: Callable[[Dict[str, Any],
-                              torch.Tensor], Dict[str, Any]] = None,
+        process_fn: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Perform matching operation in evaluation mode and process matches.

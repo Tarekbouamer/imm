@@ -9,7 +9,7 @@ MATCHERS_REGISTRY = ModelRegistry("matchers", location=__file__)
 
 def create_matcher(
     name: str,
-    cfg: Optional[Mapping[str, Any]] = None,
+    cfg: dict = {},
     pretrained: bool = True,
     **kwargs: Any,
 

@@ -4,6 +4,69 @@ Tasks organized by feature category, with completion status across all work stre
 
 ---
 
+## Priority 1: HDF5 Data Management & Optimization
+
+### HDF5 Compression & Performance
+
+**Problem:** HDF5 files can be large; need compression and optimization options for storage and I/O efficiency.
+
+**Steps:**
+
+1. Add compression options for HDF5 writers (gzip levels, lzf, blosc)
+2. Configure chunk sizes for optimal read/write performance
+3. Add compression level CLI flags to extraction and matching commands
+4. Benchmark compression vs speed tradeoffs
+
+**Benefits:** Reduced storage requirements, faster network transfers, configurable performance
+
+---
+
+### HDF5 Streaming & Append Mode
+
+**Problem:** Current writers require full dataset in memory; need streaming for large-scale datasets.
+
+**Steps:**
+
+1. Implement streaming writers for memory-constrained environments
+2. Add append mode for incremental dataset building
+3. Support resumable writes (handle interruptions gracefully)
+4. Add buffer size configuration for streaming operations
+
+**Benefits:** Handle datasets larger than RAM, incremental processing, fault tolerance
+
+---
+
+### HDF5 Metadata & Indexing
+
+**Problem:** No efficient way to query HDF5 contents without loading entire file.
+
+**Steps:**
+
+1. Add HDF5 index/metadata for fast querying (image names, feature counts, timestamps)
+2. Create CLI inspection tool (`imm-inspect`) for querying HDF5 contents
+3. Support filter/search operations (by name pattern, feature count range, etc.)
+4. Add summary statistics generation (total images, keypoint distribution, file size breakdown)
+
+**Benefits:** Fast dataset inspection, easier debugging, better data management
+
+---
+
+### Save Extracted Features & Matched Pairs Outside Manifest
+
+**Problem:** Extracted features and matched pairs are stored in HDF5, but file paths and pair relationships need to be preserved in external manifests for reproducibility and data lineage.
+
+**Steps:**
+
+1. Add CSV/JSON manifest output for extraction (image paths, feature counts, timestamps)
+2. Save pair lists for matching operations (input pairs, successful matches, failed matches)
+3. Include metadata: extraction config, model version, processing time
+4. Support manifest formats compatible with common evaluation tools
+5. Add validation to verify manifest consistency with HDF5 contents
+
+**Benefits:** Reproducible experiments, easier dataset sharing, clear data provenance, compatibility with external tools
+
+---
+
 ## Consistency & Quality
 
 _All organizational and structural refactoring tasks completed. Feature-specific items tracked in their respective sections below._
@@ -81,10 +144,7 @@ _All organizational and structural refactoring tasks completed. Feature-specific
 - [x] `FeaturesWriter` for feature export
 - [x] `MatchesWriter` for match export
 - [x] `AsycMatchesWriter` for async match export
-- [ ] Add compression options for HDF5 (gzip levels)
-- [ ] Streaming writers for memory-constrained environments
-- [ ] Append mode for incremental dataset building
-- [ ] HDF5 index/metadata for fast querying
+- [ ] HDF5 optimization tasks (see Priority 1)
 
 ---
 

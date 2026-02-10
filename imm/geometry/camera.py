@@ -41,7 +41,13 @@ class Camera:
 
     @classmethod
     def from_image(cls, image: np.ndarray) -> "Camera":
-        h, w = image.shape[:2]
+
+        #  assert np.array
+        if not isinstance(image, np.ndarray):
+            raise ValueError(
+                f"Expected image to be a numpy array, got {type(image)}")
+
+        h, w = image.shape[0:2]
         cx, cy = w / 2.0, h / 2.0
         fx = fy = 0.5 * max(w, h)
         return cls(np.array([w, h, fx, fy, cx, cy, 0.0, 0.0], dtype=np.float32), "PINHOLE")
@@ -69,7 +75,7 @@ class Camera:
         return cls(full, model)
 
     @classmethod
-    def from_K(cls, K: np.ndarray, width: int = None, height: int = None) -> "Camera":
+    def from_K(cls, K: np.ndarray, width: int, height: int) -> "Camera":
         K = np.asarray(K, dtype=np.float32)
         if width is None:
             width = int(round(float(K[0, 2]) * 2.0))
@@ -199,7 +205,8 @@ class Camera:
         assert self.params.size > 0
         p2d = np.asarray(p2d)
         p2d = self.normalize(p2d)
-        return to_homogeneous(p2d)
+        result = to_homogeneous(p2d)
+        return np.asarray(result)
 
     def cam2image(self, p3d: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Transform 3D points into 2D pixel coordinates."""
@@ -218,4 +225,4 @@ class Camera:
         }
 
     def __repr__(self):
-        return f"Camera({self.camera_model}, {self.params})"
+        return f"Camera({self.camera_model}, width={self.width}, height={self.height}, fx={self.fx:.2f}, fy={self.fy:.2f}, cx={self.cx:.2f}, cy={self.cy:.2f}, dist={self.dist.tolist()})"

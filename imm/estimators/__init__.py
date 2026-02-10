@@ -43,7 +43,7 @@ def create_homography_estimator(
             inlier_threshold=inlier_threshold, max_iters=max_iters, confidence=confidence, **kwargs
         )
     else:
-        raise ValueError(f"Unknown homography estimator: {backend}", available=["opencv", "poselib", "pycolmap"])
+        raise ValueError(f"Unknown homography estimator: {backend}. Available backends: ['opencv', 'poselib', 'pycolmap']")
 
     logger.info(f"Created homography estimator: {estimator}")
     return estimator
@@ -67,7 +67,7 @@ def create_pnp_estimator(
     elif backend == "opencv":
         estimator = OpenCVPnPEstimator(max_reproj_error=max_reproj_error, **kwargs)
     else:
-        raise ValueError(f"Unknown PnP estimator: {backend}", available=["poselib", "pycolmap", "opencv"])
+        raise ValueError(f"Unknown PnP estimator: {backend}. Available backends: ['poselib', 'pycolmap', 'opencv']")
 
     logger.info(f"Created PnP estimator: {estimator}")
     return estimator
@@ -96,7 +96,7 @@ def create_relative_pose_estimator(
             threshold=threshold, confidence=confidence, max_iters=max_iters, **kwargs
         )
     else:
-        raise ValueError(f"Unknown relative pose estimator: {backend}", available=["opencv", "poselib", "pycolmap"])
+        raise ValueError(f"Unknown relative pose estimator: {backend}. Available backends: ['opencv']")
 
     logger.info(f"Created relative pose estimator: {estimator}")
     return estimator

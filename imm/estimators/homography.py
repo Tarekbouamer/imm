@@ -10,24 +10,30 @@ from .estimator import Estimator
 
 try:
     import poselib
+    POSERLIB_AVAILABLE = True
 except ImportError:
+    POSERLIB_AVAILABLE = False
     poselib = None
 
 try:
     import cv2
+    CV2_AVAILABLE = True
 except ImportError:
+    CV2_AVAILABLE = False
     cv2 = None
 
 try:
     import pycolmap
+    PYCOLMAP_AVAILABLE = True
 except ImportError:
+    PYCOLMAP_AVAILABLE = False
     pycolmap = None
 
 
 class HomographyResult(TypedDict):
-    H: np.ndarray | None
     success: bool
-    inliers: np.ndarray | None
+    H: np.ndarray
+    inliers: np.ndarray
     num_inliers: int
 
 
@@ -118,6 +124,9 @@ class OpenCVHomographyEstimator(Estimator):
         """
 
         try:
+            if cv2 is None:
+                raise ImportError("OpenCV is not available")
+
             pts0 = np.asarray(pts0, dtype=np.float32)
             pts1 = np.asarray(pts1, dtype=np.float32)
 
@@ -141,32 +150,34 @@ class OpenCVHomographyEstimator(Estimator):
             )
 
             if H is None:
-                return {
-                    "H": H,
-                    "success": False,
-                    "inliers": None,
-                    "num_inliers": 0,
-                }
+                HomographyResult(
+                    H=np.array([]),
+                    success=False,
+                    inliers=np.array([], dtype=bool),
+                    num_inliers=0,
+                )
 
             # Count inliers
             inliers = to_inlier_mask(
                 mask, len(pts0)) if mask is not None else None
-            num_inliers = int(inliers.sum()) if inliers is not None else 0
+            inliers = inliers if inliers is not None else np.array(
+                [], dtype=bool)
+            num_inliers = int(inliers.sum())
 
-            return {
-                "H": H,
-                "success": True,
-                "inliers": inliers,
-                "num_inliers": num_inliers,
-            }
+            return HomographyResult(
+                H=H,
+                success=True,
+                inliers=np.asarray(inliers, dtype=bool),
+                num_inliers=num_inliers,
+            )
 
         except Exception as e:
             logger.error(
                 f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {
-                "H": None,
+                "H": np.array([]),
                 "success": False,
-                "inliers": None,
+                "inliers": np.array([], dtype=bool),
                 "num_inliers": 0,
             }
 
@@ -232,6 +243,9 @@ class PoseLibHomographyEstimator(Estimator):
         """
 
         try:
+            if poselib is None:
+                raise ImportError("poselib is not available")
+
             # Validate type
             CHECK_TYPE(pts0, np.ndarray)
             CHECK_TYPE(pts1, np.ndarray)
@@ -250,26 +264,28 @@ class PoseLibHomographyEstimator(Estimator):
                 pts0, pts1, self.ransac_options, {})
 
             if H is None:
-                return {"H": H, "success": False, "inliers": None, "num_inliers": 0}
+                return {"H": np.array([]), "success": False, "inliers": np.array([], dtype=bool), "num_inliers": 0}
 
             inliers = to_inlier_mask(status.get(
                 "inliers"), len(pts0)) if status else None
-            num_inliers = int(inliers.sum()) if inliers is not None else 0
+            inliers = inliers if inliers is not None else np.array(
+                [], dtype=bool)
+            num_inliers = int(inliers.sum())
 
-            return {
-                "H": H,
-                "success": True,
-                "inliers": inliers,
-                "num_inliers": num_inliers,
-            }
+            return HomographyResult(
+                H=H,
+                success=True,
+                inliers=inliers,
+                num_inliers=num_inliers,
+            )
 
         except Exception as e:
             logger.error(
                 f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {
-                "H": None,
+                "H": np.array([]),
                 "success": False,
-                "inliers": None,
+                "inliers": np.array([], dtype=bool),
                 "num_inliers": 0,
             }
 
@@ -333,6 +349,9 @@ class PycolmapHomographyEstimator(Estimator):
         """
 
         try:
+            if pycolmap is None:
+                raise ImportError("pycolmap is not available")
+
             # Validate type and shape
             CHECK_TYPE(pts0, np.ndarray)
             CHECK_TYPE(pts1, np.ndarray)
@@ -349,21 +368,26 @@ class PycolmapHomographyEstimator(Estimator):
                 pts0, pts1, self.options)
 
             if res is None:
-                return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
+                return HomographyResult(
+                    H=np.array([]),
+                    success=False,
+                    inliers=np.array([], dtype=bool),
+                    num_inliers=0,
+                )
 
             inliers = to_inlier_mask(res.get("inliers"), len(pts0))
-            num_inliers = int(inliers.sum()) if inliers is not None else 0
+            inliers = inliers if inliers is not None else np.array(
+                [], dtype=bool)
+            num_inliers = int(inliers.sum())
 
-            return {
-                "H": res["H"],
-                "success": True,
-                "inliers": inliers,
-                "num_inliers": num_inliers,
-            }
+            return HomographyResult(
+                H=res["H"],
+                success=True,
+                inliers=inliers,
+                num_inliers=num_inliers,
+            )
         except Exception as e:
             logger.error(
-                f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
-            return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
 
     def __repr__(self):
         return f"{self.__class__.__name__}(inlier_threshold={self.inlier_threshold}, min_inlier_ratio={self.min_inlier_ratio}, confidence={self.confidence}, max_iters={self.max_iters}, min_iters={self.min_iters})"
@@ -382,7 +406,7 @@ class HomographyEstimator(Estimator):
 
     def __init__(
         self,
-        method: str = None,
+        method: str | None = None,
         solver: str = "ransac",
         inlier_threshold: float = 0.5,
         max_iters: int = 1000,

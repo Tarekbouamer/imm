@@ -42,7 +42,7 @@ def test_all_registered_extractors():
 
     image = load_image_tensor(img0_path, 640)[0].to(device)
 
-    models = EXTRACTORS_REGISTRY.list_models
+    models = EXTRACTORS_REGISTRY.list_models()
 
     for model in models:
         try:
