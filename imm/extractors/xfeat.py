@@ -261,6 +261,7 @@ class XFeat(FeatureModel):
 
         M1, K1, H1 = self.net(x)
         M1 = F.normalize(M1, dim=1)
+        print(M1.shape, K1.shape, H1.shape)
 
         # Convert logits to heatmap and extract kpts
         K1h = self.get_kpts_heatmap(K1)
@@ -292,11 +293,7 @@ class XFeat(FeatureModel):
 
         valid = scores > 0
         return [
-            {
-                "keypoints": mkpts[b][valid[b]],
-                "scores": scores[b][valid[b]],
-                "descriptors": feats[b][valid[b]],
-            }
+            {"keypoints": mkpts[b][valid[b]], "scores": scores[b][valid[b]], "descriptors": feats[b][valid[b]]}
             for b in range(B)
         ]
 

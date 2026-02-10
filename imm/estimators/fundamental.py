@@ -238,7 +238,7 @@ class PoseLibFundamentalEstimator(Estimator):
             }
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(inlier_threshold={self.inlier_threshold}, max_iters={self.max_iters}, min_iters={self.min_iters}, confidence={self.confidence}, progressive_sampling={self.progressive_sampling})"
+        return f"{self.__class__.__name__}(inlier_threshold={self.inlier_threshold}, max_iters={self.max_iters},  confidence={self.confidence}, progressive_sampling={self.progressive_sampling})"
 
 
 class PycolmapFundamentalEstimator(Estimator):

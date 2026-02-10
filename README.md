@@ -12,10 +12,7 @@
 - [Prerequisites](#prerequisites)
 - [Installation 🖥️](#installation-️)
 - [Running with Docker 🐳](#running-with-docker-)
-- [Supported Algorithms](#supported-algorithms)
-  - [Extractors](#supported-extractors)
-  - [Matchers](#supported-matchers)
-  - [Estimators](#supported-estimators)
+- [Model Zoo](Model_Zoo.md)
 - [Usage](#usage)
   - [Feature Extraction](#feature-extraction)
   - [Feature Matching](#feature-matching)
@@ -114,7 +111,7 @@ ImMatch supports a wide range of feature extractors, matchers, and geometric est
 | NN           |  
 | Superglue    |
 
-(For more visualization on the supported algorithms, check out the [Gallery](Gallery.md).)
+(For more visualization on the supported algorithms, check out the [Gallery](Gallery.md) and [Model Zoo](Model_Zoo.md).)
 
 ### Supported Estimators
 

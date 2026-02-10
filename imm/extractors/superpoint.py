@@ -105,10 +105,16 @@ class SuperPoint(FeatureModel):
         descriptors = torch.nn.functional.normalize(descriptors, p=2, dim=1)
 
         # Extract descriptors
-        descriptors = [sample_descriptors(k[None], d[None], 8)[
-            0] for k, d in zip(keypoints, descriptors)]
+        dense_desc = descriptors
+        descriptors = [sample_descriptors(k[None], d[None], 8)[0] for k, d in zip(keypoints, descriptors)]
 
-        return {"kpts": keypoints, "scores": list(scores), "desc": descriptors, "size": data["size"]}
+        return {
+            "kpts": keypoints,
+            "scores": list(scores),
+            "desc": descriptors,
+            "size": data["size"],
+            "dense_desc": dense_desc,
+        }
 
 
 # default configurations
