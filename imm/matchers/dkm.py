@@ -229,7 +229,7 @@
 # def _make_model(name, cfg=None, pretrained=True, **kwargs):
 
 #     # cfg
-#     default_cfg = get_pretrainedmerge_config(name)
+#     default_cfg = get_pretrained_config(name)
 #     cfg = {**default_cfg, **cfg}
 
 #     #

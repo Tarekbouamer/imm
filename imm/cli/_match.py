@@ -1,28 +1,79 @@
-import json
 import time
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import click
+import h5py
 import numpy as np
 import torch
 from loguru import logger
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
+from imm.data import FeaturesPairsDataset, ImagePairsDataset
 from imm.extractors._helper import create_extractor
 from imm.matchers._helper import create_matcher
 from imm.utils.data import extend_keys_with_suffix
-from imm.settings import img0_path as default_img0_path
-from imm.settings import img1_path as default_img1_path
-from imm.data import FeaturesPairsDataset, ImagePairsDataset
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
+from imm.utils.manifest import create_matching_manifest
 from imm.utils.warnings import suppress_warnings
 from imm.viz.viz2d import MatchVisualizer
-from imm.writers import AsycMatchesWriter, MatchesWriter
-from imm.utils import create_matching_manifest, save_manifest
+from imm.writers import AsyncMatchesWriter, MatchesWriter
+
+
+def filter_existing_matches(dataset, matches_file: Path, manifest_path: Path):
+    """Read existing matches and filter dataset to skip already matched pairs.
+    """
+    # Read existing matches from HDF5 file
+    existing_keys = set()
+    if matches_file.exists():
+        try:
+            with h5py.File(matches_file, "r") as h5_file:
+                existing_keys = set(h5_file.keys())
+        except Exception as e:
+            logger.warning(f"Could not read HDF5 file: {e}")
+
+    # Filter dataset based on existing matches
+    skipped_count = 0
+    if existing_keys and hasattr(dataset, 'pairs'):
+        indices = [
+            i for i, (name0, name1) in enumerate(dataset.pairs)
+            if pairs2key(name0, name1) not in existing_keys
+        ]
+        skipped_count = len(dataset.pairs) - len(indices)
+        if skipped_count > 0:
+            logger.warning(f"Skipping {skipped_count} already matched pairs")
+
+        if not indices:
+            logger.warning("All pairs already matched")
+            early_result = MatchingResult(
+                output_file=matches_file,
+                manifest_path=manifest_path,
+                processed_pairs=[],
+                skipped_pairs=skipped_count,
+                failed_pairs=0,
+                total_time=0.0,
+            )
+            return dataset, skipped_count, early_result
+
+        dataset = Subset(dataset, indices)
+
+    return dataset, skipped_count, None
+
+
+@dataclass
+class MatchingResult:
+    """Result from matching operations."""
+    output_file: Path
+    manifest_path: Path
+    processed_pairs: list[list[str]]
+    skipped_pairs: int
+    failed_pairs: int
+    total_time: float
+    match_counts: Optional[list[int]] = None
+    processing_times_ms: Optional[list[float]] = None
 
 
 def path2key(name: str) -> str:
@@ -32,7 +83,7 @@ def path2key(name: str) -> str:
 
 def pairs2key(name0: str, name1: str) -> str:
     """Creates a key for a pair of items."""
-    separator = "/"
+    separator = "-"
     return separator.join((path2key(name0), path2key(name1)))
 
 
@@ -50,10 +101,10 @@ def parse_pairs_file(pairs_file: Path) -> List[Tuple[str, str]]:
 
 
 def load_and_process_image(
-    image_path: str, resize: Optional[int], device: torch.device
+    image_path: str, resize: Optional[int], device: str
 ) -> Tuple[torch.Tensor, np.ndarray]:
     """Load and process an image."""
-    logger.info(f"Loading image: {image_path}")
+    logger.debug(f"Loading image: {image_path}")
     data = load_image_tensor(image_path, resize=resize)
     return data[0].to(device), data[1]
 
@@ -71,7 +122,7 @@ class Matching:
         """
         Initializes the Matching class and the matcher model. Sets up the extractor if needed.
         """
-        self.device = device if device else detect_device()
+        self.device = str(device) if device else detect_device()
         self.matcher = create_matcher(name=matcher_name, cfg={
                                       "match_threshold": match_thd}, **kwargs)
         self.matcher.to(self.device)
@@ -98,11 +149,12 @@ class Matching:
         return preds
 
     @torch.inference_mode()
-    def match_features(self, data: Dict[str, Union[torch.Tensor, List, Tuple]]) -> Dict:
+    def match_features(self, data: Dict[str, Union[torch.Tensor, List, Tuple]], match_thd: float = 0.0) -> Dict:
         """Matches a pair of descriptors or raw images."""
         data = to_cuda(data) if self.device == "cuda" else to_cpu(data)
         preds = self.matcher.match(data)
-        return to_numpy(preds)
+        preds = to_numpy(preds)
+        return self.filter_matches(preds, match_thd)
 
     def filter_matches(self, preds: Dict[str, np.ndarray], match_thd: float) -> Dict[str, np.ndarray]:
         if match_thd <= 0:
@@ -131,8 +183,8 @@ class Matching:
     def match_images(self, image0: torch.Tensor, image1: torch.Tensor, match_thd: float = 0.0) -> Dict[str, np.ndarray]:
         if "image0" in self.matcher.required_inputs:
             data = {"image0": image0, "image1": image1}
-            preds = self.match_features(data)
-            return self.filter_matches(preds, match_thd)
+            preds = self.match_features(data, match_thd=match_thd)
+            return preds
         else:
             if self.extractor is None:
                 raise ValueError(
@@ -142,8 +194,8 @@ class Matching:
             logger.info(
                 f"Matching img0: {len(features0['kpts0'][0])}, img1: {len(features1['kpts1'][0])}")
             data = {**features0, **features1}
-            preds = self.match_features(data)
-            return self.filter_matches(preds, match_thd)
+            preds = self.match_features(data, match_thd=match_thd)
+            return preds
 
     def compute_match_statistics(
         self, idx: int, matches: Dict[str, np.ndarray], name0: str = "", name1: str = ""
@@ -174,8 +226,28 @@ class Matching:
         num_workers: int = 4,
         print_freq: int = 100,
         match_thd: float = 0.0,
-    ) -> None:
+        override: bool = False,
+    ) -> MatchingResult:
         """Processes a dataset of image pairs and saves matching results."""
+        if batch_size != 1:
+            raise ValueError("Only batch_size=1 is supported")
+
+        # Treat save_path as directory and create matches.h5 inside
+        save_dir = Path(save_path)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        matches_file = save_dir / "matches.h5"
+        manifest_path = save_dir / "matching_manifest.json"
+
+        # Filter dataset to skip already matched pairs
+        if not override:
+            dataset, skipped_count, early_result = filter_existing_matches(
+                dataset, matches_file, manifest_path
+            )
+            if early_result:
+                return early_result
+        else:
+            skipped_count = 0
+
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
@@ -185,55 +257,81 @@ class Matching:
             persistent_workers=True if num_workers > 0 else False,
         )
 
-        # Treat save_path as directory and create matches.h5 inside
-        save_dir = Path(save_path)
-        save_dir.mkdir(parents=True, exist_ok=True)
-        matches_file = save_dir / "matches.h5"
-        manifest_path = save_dir / "matches_manifest.json"
-
-        writer = MatchesWriter(matches_file)
-
         start_time = time.time()
-        processed_pairs = []
+        with MatchesWriter(matches_file) as writer:
+            processed_pairs = []
+            match_counts = []
+            processing_times = []
+            failed_count = 0
 
-        for idx, data in enumerate(tqdm(dataloader, desc="Matching images".rjust(15), colour="green")):
-            name0, name1 = data["name0"][0], data["name1"][0]
-            image0 = data["image0"][0].to(self.device)
-            image1 = data["image1"][0].to(self.device)
+            for idx, data in enumerate(tqdm(dataloader, desc="Matching images".rjust(15), colour="green")):
+                name0, name1 = data["name0"][0], data["name1"][0]
+                image0 = data["image0"][0].to(self.device)
+                image1 = data["image1"][0].to(self.device)
 
-            # Match images directly
-            preds = self.match_images(image0, image1, match_thd=match_thd)
-            pair_key = pairs2key(name0, name1)
+                pair_start = time.time()
+                try:
+                    # Match images directly
+                    preds = self.match_images(
+                        image0, image1, match_thd=match_thd)
+                    pair_key = pairs2key(name0, name1)
 
-            # Write matches and stats to file
-            writer.write_matches(pair_key, preds)
-            processed_pairs.append({"image0": name0, "image1": name1})
+                    # Write matches and stats to file
+                    writer.write_matches(pair_key, preds)
+                    processed_pairs.append([name0, name1])
 
-            # Compute statistics
-            if (idx + 1) % print_freq == 0:
-                stats = self.compute_match_statistics(idx, preds, name0, name1)
+                    # Track statistics
+                    if "mkpts0" in preds:
+                        match_counts.append(len(preds["mkpts0"]))
+                    processing_times.append((time.time() - pair_start) * 1000)
 
-        writer.close()
+                    # Compute statistics
+                    if (idx + 1) % print_freq == 0:
+                        stats = self.compute_match_statistics(
+                            idx, preds, name0, name1)
+                except Exception as e:
+                    logger.exception(f"Failed to match pair {name0} - {name1}")
+                    failed_count += 1
+                    continue
+
         total_time = time.time() - start_time
 
-        # Save manifest
-        manifest = {
-            "matcher": self.matcher.__class__.__name__,
-            "extractor": self.extractor.__class__.__name__ if self.extractor else None,
-            "device": self.device,
-            "timestamp": datetime.now().isoformat(),
-            "total_pairs": len(processed_pairs),
-            "total_time_seconds": round(total_time, 2),
-            "pairs": processed_pairs,
+        # Get matcher config
+        config = {
+            "match_threshold": getattr(self.matcher, "match_threshold", 0.0),
         }
 
-        with open(manifest_path, "w") as f:
-            json.dump(manifest, f, indent=2)
+        # Save manifest
+        create_matching_manifest(
+            matcher_name=self.matcher.__class__.__name__,
+            config=config,
+            device=self.device,
+            total_time=total_time,
+            processed_pairs=processed_pairs,
+            manifest_path=manifest_path,
+            extractor_name=self.extractor.__class__.__name__ if self.extractor else None,
+            skipped_pairs=skipped_count,
+            failed_pairs=failed_count,
+            match_counts=match_counts if match_counts else None,
+            processing_times_ms=processing_times if processing_times else None,
+            resume_mode=not override and skipped_count > 0,
+        )
 
         logger.info(f"Matches saved to {matches_file}")
         logger.info(f"Manifest saved to {manifest_path}")
         logger.info(
             f"Total processing time for image pairs: {total_time:.2f} seconds")
+
+        return MatchingResult(
+            output_file=matches_file,
+            manifest_path=manifest_path,
+            processed_pairs=processed_pairs,
+            skipped_pairs=skipped_count,
+            failed_pairs=failed_count,
+            total_time=total_time,
+            match_counts=match_counts if match_counts else None,
+            processing_times_ms=processing_times if processing_times else None,
+        )
 
     @torch.inference_mode()
     def match_sequence_features(
@@ -245,8 +343,28 @@ class Matching:
         print_freq: int = 100,
         keys: Optional[List[str]] = None,
         match_thd: float = 0.0,
-    ) -> None:
+        override: bool = False,
+    ) -> MatchingResult:
         """Processes a dataset of pre-extracted feature pairs and saves matching results."""
+        if batch_size != 1:
+            raise ValueError("Only batch_size=1 is supported")
+
+        # Treat save_path as directory and create matches.h5 inside
+        save_dir = Path(save_path)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        matches_file = save_dir / "matches.h5"
+        manifest_path = save_dir / "matching_manifest.json"
+
+        # Filter dataset to skip already matched pairs
+        if not override:
+            dataset, skipped_count, early_result = filter_existing_matches(
+                dataset, matches_file, manifest_path
+            )
+            if early_result:
+                return early_result
+        else:
+            skipped_count = 0
+
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,
@@ -257,59 +375,82 @@ class Matching:
             persistent_workers=True if num_workers > 0 else False,
         )
 
-        # Treat save_path as directory and create matches.h5 inside
-        save_dir = Path(save_path)
-        save_dir.mkdir(parents=True, exist_ok=True)
-        matches_file = save_dir / "matches.h5"
-        manifest_path = save_dir / "matches_manifest.json"
-
-        writer = AsycMatchesWriter(matches_file, num_workers=num_workers)
-
-        if match_thd > 0:
-            raise NotImplementedError(
-                "Filtering matches based on threshold is not implemented yet")
-
         start_time = time.time()
-        processed_pairs = []
+        with AsyncMatchesWriter(matches_file, num_workers=num_workers) as writer:
+            processed_pairs = []
+            match_counts = []
+            processing_times = []
+            failed_count = 0
 
-        for idx, data in enumerate(tqdm(dataloader, desc="Matching features".rjust(15), colour="green")):
-            name0, name1 = data["name0"][0], data["name1"][0]
+            for idx, data in enumerate(tqdm(dataloader, desc="Matching features".rjust(15), colour="green")):
+                name0, name1 = data["name0"][0], data["name1"][0]
 
-            # Match pre-extracted features
-            preds = self.match_features(data)
-            pair_key = pairs2key(name0, name1)
+                pair_start = time.time()
+                try:
+                    # Match pre-extracted features
+                    preds = self.match_features(data, match_thd=match_thd)
+                    pair_key = pairs2key(name0, name1)
 
-            # Filter keys
-            wpreds = {k: preds[k] for k in keys} if keys else preds
+                    # Filter keys
+                    wpreds = {k: preds[k] for k in keys} if keys else preds
 
-            # Write matches and stats to file
-            writer.write_matches(pair_key, wpreds)
-            processed_pairs.append({"image0": name0, "image1": name1})
+                    # Write matches and stats to file
+                    writer.write_matches(pair_key, wpreds)
+                    processed_pairs.append([name0, name1])
 
-            # Compute statistics
-            if (idx + 1) % print_freq == 0:
-                stats = self.compute_match_statistics(idx, preds, name0, name1)
+                    # Track statistics
+                    if "mkpts0" in preds:
+                        match_counts.append(len(preds["mkpts0"]))
+                    processing_times.append((time.time() - pair_start) * 1000)
 
-        writer.close()
+                    # Compute statistics
+                    if (idx + 1) % print_freq == 0:
+                        stats = self.compute_match_statistics(
+                            idx, preds, name0, name1)
+                except Exception as e:
+                    logger.exception(f"Failed to match pair {name0} - {name1}")
+                    failed_count += 1
+                    continue
+
         total_time = time.time() - start_time
 
-        # Save manifest
-        manifest = {
-            "matcher": self.matcher.__class__.__name__,
-            "device": self.device,
-            "timestamp": datetime.now().isoformat(),
-            "total_pairs": len(processed_pairs),
-            "total_time_seconds": round(total_time, 2),
-            "pairs": processed_pairs,
+        # Get matcher config
+        config = {
+            "match_threshold": getattr(self.matcher, "match_threshold", 0.0),
         }
 
-        with open(manifest_path, "w") as f:
-            json.dump(manifest, f, indent=2)
+        # Save manifest
+        create_matching_manifest(
+            matcher_name=self.matcher.__class__.__name__,
+            config=config,
+            device=self.device,
+            total_time=total_time,
+            processed_pairs=processed_pairs,
+            manifest_path=manifest_path,
+            features_file=str(dataset.features_path) if hasattr(
+                dataset, 'features_path') else None,
+            skipped_pairs=skipped_count,
+            failed_pairs=failed_count,
+            match_counts=match_counts if match_counts else None,
+            processing_times_ms=processing_times if processing_times else None,
+            resume_mode=not override and skipped_count > 0,
+        )
 
         logger.info(f"Matches saved to {matches_file}")
         logger.info(f"Manifest saved to {manifest_path}")
         logger.info(
             f"Total processing time for feature pairs: {total_time:.2f} seconds")
+
+        return MatchingResult(
+            output_file=matches_file,
+            manifest_path=manifest_path,
+            processed_pairs=processed_pairs,
+            skipped_pairs=skipped_count,
+            failed_pairs=failed_count,
+            total_time=total_time,
+            match_counts=match_counts if match_counts else None,
+            processing_times_ms=processing_times if processing_times else None,
+        )
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(matcher={self.matcher}, extractor={self.extractor}, device={self.device})"

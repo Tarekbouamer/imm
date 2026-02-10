@@ -1,21 +1,13 @@
 import enum
-import os
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import cv2
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from loguru import logger
 
 from imm.utils.io import read_image
-
-# Agg / tkagg
-if not os.environ.get('DISPLAY'):
-    matplotlib.use('Agg')  # Headless backend
-else:
-    matplotlib.use('tkagg')  # Interactive backend
 
 
 class VizType(enum.Enum):
@@ -42,7 +34,7 @@ class Viz2D:
 
         if show_image:
             plt.figure(figsize=(10, 10))
-            plt.imshow(image)
+            plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             plt.title(title)
             plt.axis("off")
             plt.show()
@@ -61,14 +53,10 @@ class Viz2D:
 
     def draw_composite_image(
         self,
-        image0: Union[np.ndarray, str, Path],
         image1: Union[np.ndarray, str, Path],
+        image2: Union[np.ndarray, str, Path],
         offset: int = 10,
     ) -> np.ndarray:
-<<<<<<< HEAD:imm/utils/viz2d.py
-        image0 = self.ensure_rgb(image0)
-        image1 = self.ensure_rgb(image1)
-=======
         """Draw two images side by side.
 
         Args:
@@ -81,24 +69,18 @@ class Viz2D:
         """
         image1, _ = read_image(image1)
         image2, _ = read_image(image2)
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/viz/viz2d.py
 
-        h0, w0, _ = image0.shape
         h1, w1, _ = image1.shape
+        h2, w2, _ = image2.shape
 
-        max_height = max(h0, h1)
-        total_width = w0 + w1 + offset
+        max_height = max(h1, h2)
+        total_width = w1 + w2 + offset
 
         composite_image = np.ones(
             (max_height, total_width, 3), dtype=np.uint8) * 255
 
-<<<<<<< HEAD:imm/utils/viz2d.py
-        composite_image[:h0, :w0, :] = image0
-        composite_image[:h1, w0 + offset : w0 + offset + w1, :] = image1
-=======
         composite_image[:h1, :w1, :] = image1
         composite_image[:h2, w1 + offset: w1 + offset + w2, :] = image2
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/viz/viz2d.py
 
         self.results = composite_image  # Store the drawn result
         return composite_image
@@ -170,8 +152,8 @@ class MatchVisualizer(Viz2D):
 
     def draw_matches(
         self,
-        image0: Union[np.ndarray, str, Path],
         image1: Union[np.ndarray, str, Path],
+        image2: Union[np.ndarray, str, Path],
         kpts0: np.ndarray,
         kpts1: np.ndarray,
         mkpts0: np.ndarray,
@@ -181,14 +163,9 @@ class MatchVisualizer(Viz2D):
         color_inliers: Optional[Tuple[int, int, int]] = (0, 0, 255),
         color_outliers: Optional[Tuple[int, int, int]] = (255, 0, 0),
         color_lines: Optional[Tuple[int, int, int]] = (0, 255, 0),
+        offset: int = 10,
         title: str = "Matches",
         show_image: bool = True,
-<<<<<<< HEAD:imm/utils/viz2d.py
-    ) -> np.ndarray:
-        image0_rgb = self.ensure_rgb(image0)
-        image1_rgb = self.ensure_rgb(image1)
-        composite_image = self.draw_composite_image(image0_rgb, image1_rgb)
-=======
     ):
         """Draw matches between two images.
 
@@ -204,6 +181,7 @@ class MatchVisualizer(Viz2D):
             color_inliers: Color for matched keypoints
             color_outliers: Color for unmatched keypoints
             color_lines: Color for match lines
+            offset: Pixel offset between images
             title: Visualization title
             show_image: Whether to display the image
 
@@ -212,8 +190,8 @@ class MatchVisualizer(Viz2D):
         """
         image1_rgb, _ = read_image(image1)
         image2_rgb, _ = read_image(image2)
-        composite_image = self.draw_composite_image(image1_rgb, image2_rgb)
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension):imm/viz/viz2d.py
+        composite_image = self.draw_composite_image(
+            image1_rgb, image2_rgb, offset=offset)
 
         # Draw all keypoints
         for kp in kpts0:
@@ -222,7 +200,7 @@ class MatchVisualizer(Viz2D):
         for kp in kpts1:
             cv2.circle(
                 composite_image,
-                (int(kp[0]) + image0_rgb.shape[1] + 10, int(kp[1])),
+                (int(kp[0]) + image1_rgb.shape[1] + offset, int(kp[1])),
                 3,
                 color_outliers,
                 -1,
@@ -239,21 +217,25 @@ class MatchVisualizer(Viz2D):
             )
             cv2.circle(
                 composite_image,
-                (int(mkpts1[i][0]) + image0_rgb.shape[1] + 10, int(mkpts1[i][1])),
+                (
+                    int(mkpts1[i][0]) + image1_rgb.shape[1] + offset,
+                    int(mkpts1[i][1]),
+                ),
                 3,
                 color_inliers,
                 -1,
             )
 
-        # Draw match lines
         if mscores is not None:
             valid = np.where(matches != -1)[0]
             mscores = mscores[valid]
-            mscores = mscores / mscores.max()  # Normalize scores to [0, 1]
 
             for i, score in enumerate(mscores):
                 kp0 = mkpts0[i]
-                kp1_offset = (mkpts1[i][0] + image0_rgb.shape[1] + 10, mkpts1[i][1])
+                kp1_offset = (
+                    mkpts1[i][0] + image1_rgb.shape[1] + offset,
+                    mkpts1[i][1],
+                )
                 color = tuple(int(c * score) for c in color_lines)
                 cv2.line(
                     composite_image,
@@ -262,9 +244,11 @@ class MatchVisualizer(Viz2D):
                     color,
                     1,
                 )
-
+        # title with number of keypoints of image 0 and image 1 and matches
         title = f"{title} (kpts0: {len(kpts0)}, kpts1: {len(kpts1)}, matches: {len(mkpts0)})"
+
         self.draw_image(composite_image, title, show_image=show_image)
+
         return composite_image
 
     def draw_epipolar_line(
@@ -288,7 +272,8 @@ class MatchVisualizer(Viz2D):
         h1, w1 = image1_rgb.shape[:2]
 
         for pt0, pt1 in zip(kpts0, kpts1):
-            cv2.circle(composite_image, (int(pt0[0]), int(pt0[1])), 5, (0, 0, 255), -1)
+            cv2.circle(composite_image,
+                       (int(pt0[0]), int(pt0[1])), 5, (0, 0, 255), -1)
 
             pt1_h = np.array([pt0[0], pt0[1], 1]).reshape(3, 1)
             epip_line = F @ pt1_h
@@ -298,9 +283,11 @@ class MatchVisualizer(Viz2D):
                 x0, x1 = 0, w1 - 1
                 y0 = int((-a * x0 - c) / b)
                 y1 = int((-a * x1 - c) / b)
-                cv2.line(composite_image, (w0 + x0, y0), (w0 + x1, y1), (0, 255, 0), 1)
+                cv2.line(composite_image, (w0 + x0, y0),
+                         (w0 + x1, y1), (0, 255, 0), 1)
 
-            cv2.circle(composite_image, (w0 + int(pt1[0]), int(pt1[1])), 5, (255, 0, 0), -1)
+            cv2.circle(composite_image,
+                       (w0 + int(pt1[0]), int(pt1[1])), 5, (255, 0, 0), -1)
 
         self.draw_image(composite_image, title, show_image=show_image)
         return composite_image

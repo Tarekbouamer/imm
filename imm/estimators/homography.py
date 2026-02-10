@@ -1,4 +1,4 @@
-from typing import Any, Dict, Union
+from typing import Any, Dict, TypedDict, Union
 
 import numpy as np
 from loguru import logger
@@ -12,37 +12,67 @@ try:
     import poselib
 except ImportError:
     poselib = None
-    logger.warning("PoseLib not found. PoseLibHomographyEstimator will not work.")
 
 try:
     import cv2
 except ImportError:
     cv2 = None
-    logger.warning("OpenCV not found. CvHomographyEstimator will not work.")
 
 try:
     import pycolmap
 except ImportError:
     pycolmap = None
-    logger.warning("Pycolmap not found. PycolmapHomographyEstimator will not work.")
 
 
-CV_H_SOLVERS = {
-    "ransac": cv2.RANSAC,
-    "lmeds": cv2.LMEDS,
-    "rho": cv2.RHO,
-    "usac": cv2.USAC_DEFAULT,
-    "usac_parallel": cv2.USAC_PARALLEL,
-    "usac_accurate": cv2.USAC_ACCURATE,
-    "usac_fast": cv2.USAC_FAST,
-    "usac_prosac": cv2.USAC_PROSAC,
-    "usac_magsac": cv2.USAC_MAGSAC,
-}
+class HomographyResult(TypedDict):
+    H: np.ndarray | None
+    success: bool
+    inliers: np.ndarray | None
+    num_inliers: int
+
+
+def to_inlier_mask(inliers, num_points: int) -> np.ndarray | None:
+    if inliers is None:
+        return None
+
+    arr = np.asarray(inliers).ravel()
+    if arr.size == 0:
+        return np.zeros(num_points, dtype=bool)
+
+    if arr.dtype == bool:
+        if arr.size != num_points:
+            raise ValueError(
+                "Inlier mask size does not match number of points")
+        return arr
+
+    if arr.size == num_points and np.all((arr == 0) | (arr == 1)):
+        return arr.astype(bool)
+
+    if arr.max() < num_points and arr.min() >= 0:
+        mask = np.zeros(num_points, dtype=bool)
+        mask[arr.astype(int)] = True
+        return mask
+
+    raise ValueError("Unsupported inliers format")
+
+
+CV_H_SOLVERS = {}
+if cv2 is not None:
+    CV_H_SOLVERS = {
+        "ransac": cv2.RANSAC,
+        "lmeds": cv2.LMEDS,
+        "rho": cv2.RHO,
+        "usac": cv2.USAC_DEFAULT,
+        "usac_parallel": cv2.USAC_PARALLEL,
+        "usac_accurate": cv2.USAC_ACCURATE,
+        "usac_fast": cv2.USAC_FAST,
+        "usac_prosac": cv2.USAC_PROSAC,
+        "usac_magsac": cv2.USAC_MAGSAC,
+    }
 
 
 class OpenCVHomographyEstimator(Estimator):
-    """
-    Homography estimator using OpenCV.
+    """Homography estimator using OpenCV.
 
     Args:
         solver: Solver method to use (default: "ransac").
@@ -61,17 +91,23 @@ class OpenCVHomographyEstimator(Estimator):
     ):
         super().__init__()
 
+        if cv2 is None:
+            raise ImportError(
+                "OpenCVHomographyEstimator requires `opencv-python`. "
+                "Install it with: pip install opencv-python"
+            )
+
         if solver not in CV_H_SOLVERS:
-            raise ValueError(f"Invalid solver: {solver}. Valid options are: {list(CV_H_SOLVERS.keys())}")
+            raise ValueError(
+                f"Invalid solver: {solver}. Valid options are: {list(CV_H_SOLVERS.keys())}")
 
         self.solver = solver
         self.inlier_threshold = inlier_threshold
         self.max_iters = max_iters
         self.confidence = confidence
 
-    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> Dict[str, Union[Any]]:
-        """
-        Estimate homography.
+    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> HomographyResult:
+        """Estimate homography.
 
         Args:
             pts0: First set of points (Nx2 array).
@@ -81,20 +117,9 @@ class OpenCVHomographyEstimator(Estimator):
             Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
 
-        # Check if OpenCV is available
-        if cv2 is None:
-            logger.error("OpenCV not found. CvHomographyEstimator will not work.")
-            return {
-                "H": None,
-                "success": False,
-                "inliers": None,
-                "num_inliers": 0,
-            }
-
         try:
-            # Validate type
-            CHECK_TYPE(pts0, np.ndarray)
-            CHECK_TYPE(pts1, np.ndarray)
+            pts0 = np.asarray(pts0, dtype=np.float32)
+            pts1 = np.asarray(pts1, dtype=np.float32)
 
             # Validate shape
             CHECK_SHAPE(pts0, (-1, 2))
@@ -102,7 +127,8 @@ class OpenCVHomographyEstimator(Estimator):
 
             # Check sufficient points
             if len(pts0) < 4 or len(pts1) < 4:
-                raise ValueError("At least 4 points are required to estimate homography.")
+                raise ValueError(
+                    "At least 4 points are required to estimate homography.")
 
             # Compute homography
             H, mask = cv2.findHomography(
@@ -118,22 +144,25 @@ class OpenCVHomographyEstimator(Estimator):
                 return {
                     "H": H,
                     "success": False,
-                    "inliers": 0,
+                    "inliers": None,
                     "num_inliers": 0,
                 }
 
             # Count inliers
-            num_inliers = int(mask.sum()) if mask is not None else 0
+            inliers = to_inlier_mask(
+                mask, len(pts0)) if mask is not None else None
+            num_inliers = int(inliers.sum()) if inliers is not None else 0
 
             return {
                 "H": H,
                 "success": True,
-                "inliers": mask.reshape(-1).astype(bool),
+                "inliers": inliers,
                 "num_inliers": num_inliers,
             }
 
         except Exception as e:
-            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
+            logger.error(
+                f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {
                 "H": None,
                 "success": False,
@@ -170,6 +199,13 @@ class PoseLibHomographyEstimator(Estimator):
         **kwargs,
     ):
         super().__init__()
+
+        if poselib is None:
+            raise ImportError(
+                "PoseLibHomographyEstimator requires `poselib`. "
+                "Install it with: pip install poselib"
+            )
+
         self.inlier_threshold = inlier_threshold
         self.max_iters = max_iters
         self.confidence = confidence
@@ -183,7 +219,7 @@ class PoseLibHomographyEstimator(Estimator):
             "progressive_sampling": progressive_sampling,
         }
 
-    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> Dict[str, Union[Any]]:
+    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> HomographyResult:
         """
         Estimate homography.
 
@@ -194,16 +230,6 @@ class PoseLibHomographyEstimator(Estimator):
         Returns:
             Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
-
-        # Check if PoseLib is available
-        if poselib is None:
-            logger.error("PoseLib not found. PoseLibHomographyEstimator will not work.")
-            return {
-                "H": None,
-                "success": False,
-                "inliers": None,
-                "num_inliers": 0,
-            }
 
         try:
             # Validate type
@@ -216,22 +242,30 @@ class PoseLibHomographyEstimator(Estimator):
 
             # Check sufficient points
             if len(pts0) < 4 or len(pts1) < 4:
-                raise ValueError("At least 4 points are required to estimate homography.")
+                raise ValueError(
+                    "At least 4 points are required to estimate homography.")
 
             # Estimate homography
-            H, status = poselib.estimate_homography(pts0, pts1, self.ransac_options, {})
+            H, status = poselib.estimate_homography(
+                pts0, pts1, self.ransac_options, {})
 
             if H is None:
-                return {"H": H, "success": False, "inliers": None}
+                return {"H": H, "success": False, "inliers": None, "num_inliers": 0}
+
+            inliers = to_inlier_mask(status.get(
+                "inliers"), len(pts0)) if status else None
+            num_inliers = int(inliers.sum()) if inliers is not None else 0
 
             return {
                 "H": H,
                 "success": True,
-                **status,
+                "inliers": inliers,
+                "num_inliers": num_inliers,
             }
 
         except Exception as e:
-            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
+            logger.error(
+                f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {
                 "H": None,
                 "success": False,
@@ -266,6 +300,12 @@ class PycolmapHomographyEstimator(Estimator):
     ):
         super().__init__()
 
+        if pycolmap is None:
+            raise ImportError(
+                "PycolmapHomographyEstimator requires `pycolmap`. "
+                "Install it with: pip install pycolmap"
+            )
+
         self.inlier_threshold = inlier_threshold
         self.min_inlier_ratio = min_inlier_ratio
         self.confidence = confidence
@@ -280,7 +320,7 @@ class PycolmapHomographyEstimator(Estimator):
         self.options.max_num_trials = max_iters
         self.options.min_num_trials = min_iters
 
-    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> Dict[str, Union[Any]]:
+    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> HomographyResult:
         """
         Estimate homography.
 
@@ -292,11 +332,6 @@ class PycolmapHomographyEstimator(Estimator):
             Dictionary containing the estimated homography matrix, success status, inliers and inliers count.
         """
 
-        # Check if Pycolmap is available
-        if pycolmap is None:
-            logger.error("Pycolmap not found. PycolmapHomographyEstimator will not work.")
-            return {"H": None, "success": False, "inliers": 0}
-
         try:
             # Validate type and shape
             CHECK_TYPE(pts0, np.ndarray)
@@ -306,22 +341,28 @@ class PycolmapHomographyEstimator(Estimator):
 
             # Check sufficient points
             if len(pts0) < 4 or len(pts1) < 4:
-                raise ValueError("At least 4 points are required to estimate homography.")
+                raise ValueError(
+                    "At least 4 points are required to estimate homography.")
 
             # Estimate homography
-            res = pycolmap.homography_matrix_estimation(pts0, pts1, self.options)
+            res = pycolmap.homography_matrix_estimation(
+                pts0, pts1, self.options)
 
             if res is None:
                 return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
 
+            inliers = to_inlier_mask(res.get("inliers"), len(pts0))
+            num_inliers = int(inliers.sum()) if inliers is not None else 0
+
             return {
                 "H": res["H"],
-                "success": True if res is not None else False,
-                "inliers": res["inliers"],
-                "num_inliers": res["num_inliers"],
+                "success": True,
+                "inliers": inliers,
+                "num_inliers": num_inliers,
             }
         except Exception as e:
-            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
+            logger.error(
+                f"Error in {self.__class__.__name__}: {e}, Input shape: pts0={pts0.shape}, pts1={pts1.shape}")
             return {"H": None, "success": False, "inliers": None, "num_inliers": 0}
 
     def __repr__(self):
@@ -329,8 +370,7 @@ class PycolmapHomographyEstimator(Estimator):
 
 
 class HomographyEstimator(Estimator):
-    """
-    Unified Homography Estimator.
+    """Unified Homography Estimator.
 
     Args:
         backend (str): Backend to use. Default is the available backend by priority.
@@ -352,20 +392,36 @@ class HomographyEstimator(Estimator):
         super().__init__()
 
         # Choose the backend
-        method = method if not None else get_backend()
+        method = method if method is not None else get_backend()
 
         if method == "opencv":
-            self.estimator = OpenCVHomographyEstimator(solver, inlier_threshold, max_iters, confidence)
+            self.estimator = OpenCVHomographyEstimator(
+                solver=solver,
+                inlier_threshold=inlier_threshold,
+                max_iters=max_iters,
+                confidence=confidence,
+                **kwargs,
+            )
         elif method == "poselib":
-            self.estimator = PoseLibHomographyEstimator(inlier_threshold, max_iters, confidence, **kwargs)
+            self.estimator = PoseLibHomographyEstimator(
+                inlier_threshold=inlier_threshold,
+                max_iters=max_iters,
+                confidence=confidence,
+                **kwargs,
+            )
         elif method == "pycolmap":
-            self.estimator = PycolmapHomographyEstimator(inlier_threshold, 0.1, confidence, max_iters, 1000)
+            self.estimator = PycolmapHomographyEstimator(
+                inlier_threshold=inlier_threshold,
+                confidence=confidence,
+                max_iters=max_iters,
+                **kwargs,
+            )
         else:
-            raise ValueError(f"Invalid method: {method}. Valid options are: cv2, poselib, pycolmap")
+            raise ValueError(
+                f"Invalid method: {method}. Valid options are: opencv, poselib, pycolmap")
 
-    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> Dict[str, Union[Any]]:
-        """
-        Estimate homography.
+    def estimate(self, pts0: np.ndarray, pts1: np.ndarray) -> HomographyResult:
+        """Estimate homography.
 
         Args:
             pts0: First set of points (Nx2 array).

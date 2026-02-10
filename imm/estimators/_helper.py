@@ -1,31 +1,29 @@
-<<<<<<< HEAD
 from loguru import logger
 
 try:
     import poselib
 except ImportError:
     poselib = None
-    logger.warning("PoseLib not found. PoseLibHomographyEstimator will not work.")
+    logger.warning("PoseLib not found. PoseLib estimators will not work.")
 
 try:
     import cv2
 except ImportError:
     cv2 = None
-    logger.warning("OpenCV not found. CvHomographyEstimator will not work.")
+    logger.warning("OpenCV not found. OpenCV estimators will not work.")
 
 try:
     import pycolmap
 except ImportError:
     pycolmap = None
-    logger.warning("Pycolmap not found. PycolmapHomographyEstimator will not work.")
+    logger.warning("Pycolmap not found. Pycolmap estimators will not work.")
 
 
 def get_backend():
-    """
-    Get the default backend for homography estimation.
+    """Get the default backend for estimation.
 
     Returns:
-        Default backend for homography estimation.
+        Default backend for estimation based on available libraries.
     """
     if cv2 is not None:
         return "opencv"
@@ -34,7 +32,5 @@ def get_backend():
     elif pycolmap is not None:
         return "pycolmap"
     else:
-        raise ValueError("No backend found for homography estimation.")
-=======
-from imm.geometry import Camera
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
+        raise ValueError(
+            "No backend found for estimation. Install opencv-python, poselib, or pycolmap.")

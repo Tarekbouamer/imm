@@ -24,7 +24,7 @@ def to_tensor(data):
     elif isinstance(data, tuple):
         return tuple(to_tensor(v) for v in data)
     elif isinstance(data, set):
-        return {to_tensor(v) for v in data}
+        return [to_tensor(v) for v in data]
     elif isinstance(data, (int, float, np.ndarray)):
         return torch.tensor(data)
     elif isinstance(data, torch.Tensor):
@@ -42,9 +42,9 @@ def to_numpy(data):
     elif isinstance(data, tuple):
         return tuple(to_numpy(v) for v in data)
     elif isinstance(data, set):
-        return {to_numpy(v) for v in data}
+        return [to_numpy(v) for v in data]
     elif isinstance(data, torch.Tensor):
-        return data.cpu().numpy()
+        return data.detach().cpu().numpy()
     elif isinstance(data, (int, float, np.ndarray)):
         return np.array(data)
     else:
@@ -60,7 +60,7 @@ def to_cpu(data):
     elif isinstance(data, tuple):
         return tuple(to_cpu(v) for v in data)
     elif isinstance(data, set):
-        return {to_cpu(v) for v in data}
+        return [to_cpu(v) for v in data]
     elif isinstance(data, torch.Tensor):
         return data.cpu()
     else:
@@ -71,6 +71,7 @@ def to_cuda(data):
     """Move data to CUDA recursively, if CUDA is available."""
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is not available")
+
     if isinstance(data, dict):
         return {k: to_cuda(v) for k, v in data.items()}
     elif isinstance(data, list):
@@ -78,7 +79,7 @@ def to_cuda(data):
     elif isinstance(data, tuple):
         return tuple(to_cuda(v) for v in data)
     elif isinstance(data, set):
-        return {to_cuda(v) for v in data}
+        return [to_cuda(v) for v in data]
     elif isinstance(data, torch.Tensor):
         return data.cuda()
     else:
@@ -94,11 +95,11 @@ def to_half(data):
     elif isinstance(data, tuple):
         return tuple(to_half(v) for v in data)
     elif isinstance(data, set):
-        return {to_half(v) for v in data}
+        return [to_half(v) for v in data]
     elif isinstance(data, torch.Tensor):
-        return data.half()
+        return data.half() if data.is_floating_point() else data
     elif isinstance(data, np.ndarray):
-        return data.astype(np.float16)
+        return data.astype(np.float16) if np.issubdtype(data.dtype, np.floating) else data
     else:
         raise TypeError(f"Unsupported data type: {type(data)}")
 
@@ -112,7 +113,7 @@ def to_short(data):
     elif isinstance(data, tuple):
         return tuple(to_short(v) for v in data)
     elif isinstance(data, set):
-        return {to_short(v) for v in data}
+        return [to_short(v) for v in data]
     elif isinstance(data, torch.Tensor):
         return data.short()
     elif isinstance(data, np.ndarray):

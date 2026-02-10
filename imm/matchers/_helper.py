@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Mapping, Optional
 
 from loguru import logger
 
@@ -9,9 +9,11 @@ MATCHERS_REGISTRY = ModelRegistry("matchers", location=__file__)
 
 def create_matcher(
     name: str,
-    cfg: Optional[Dict[str, Any]] = None,
+    cfg: Optional[Mapping[str, Any]] = None,
     pretrained: bool = True,
     **kwargs: Any,
+
+
 ) -> Any:
     """Create a matcher model from registry.
 
@@ -25,19 +27,25 @@ def create_matcher(
         Created matcher model.
     """
     logger.info(
-        f"Create matcher: {name}" + (f" with config: {cfg}" if cfg is not None else ""))
+        f"Create matcher: {name} "
+        f"pretrained={pretrained} "
+        f"cfg={cfg}"
+    )
 
-    try:
-        if not MATCHERS_REGISTRY.is_model(name):
-            available_models = MATCHERS_REGISTRY.list_models
-            raise ValueError(
-                f"Matcher '{name}' is not available. Available models are: {', '.join(available_models)}"
-            )
-        model = MATCHERS_REGISTRY.create_model(
-            name, cfg=cfg, pretrained=pretrained, **kwargs)
-        logger.info(f"Successfully created matcher: {name}")
-        return model
+    if not MATCHERS_REGISTRY.is_model(name):
+        available_models = MATCHERS_REGISTRY.list_models()
+        raise ValueError(
+            f"Matcher '{name}' is not available.\n"
+            f"Available models:\n"
+            f"  - " + "\n  - ".join(sorted(available_models))
+        )
 
-    except Exception as e:
-        logger.error(f"Error creating matcher '{name}': {e}")
-        raise
+    model = MATCHERS_REGISTRY.create_model(
+        name, cfg=cfg, pretrained=pretrained, **kwargs)
+
+    if model is None:
+        raise RuntimeError(
+            f"Failed to create matcher '{name}': create_model returned None")
+
+    logger.info(f"Successfully created matcher: {name}")
+    return model

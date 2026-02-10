@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Mapping, Optional
 
 from loguru import logger
 
@@ -9,7 +9,7 @@ EXTRACTORS_REGISTRY = ModelRegistry("extractors", location=__file__)
 
 def create_extractor(
     name: str,
-    cfg: Optional[Dict[str, Any]] = None,
+    cfg: Optional[Mapping[str, Any]] = None,
     pretrained: bool = True,
     **kwargs: Any,
 ) -> Any:
@@ -24,20 +24,26 @@ def create_extractor(
     Returns:
         Created extractor model.
     """
-    logger.info(f"Create extractor: {name}" +
-                (f" with config: {cfg}" if cfg is not None else ""))
+    logger.info(
+        f"Create extractor: {name} "
+        f"pretrained={pretrained} "
+        f"cfg={cfg}"
+    )
 
-    try:
-        if not EXTRACTORS_REGISTRY.is_model(name):
-            available_models = EXTRACTORS_REGISTRY.list_models
-            raise ValueError(
-                f"Extractor '{name}' is not available. Available models are: {', '.join(available_models)}"
-            )
-        model = EXTRACTORS_REGISTRY.create_model(
-            name, cfg=cfg, pretrained=pretrained, **kwargs)
-        logger.info(f"Successfully created extractor: {name}")
-        return model
+    if not EXTRACTORS_REGISTRY.is_model(name):
+        available_models = EXTRACTORS_REGISTRY.list_models()
+        raise ValueError(
+            f"Extractor '{name}' is not available.\n"
+            f"Available models:\n"
+            f"  - " + "\n  - ".join(sorted(available_models))
+        )
 
-    except Exception as e:
-        logger.error(f"Error creating extractor '{name}': {e}")
-        raise
+    model = EXTRACTORS_REGISTRY.create_model(
+        name, cfg=cfg, pretrained=pretrained, **kwargs)
+
+    if model is None:
+        raise RuntimeError(
+            f"Failed to create extractor '{name}': create_model returned None")
+
+    logger.info(f"Successfully created extractor: {name}")
+    return model

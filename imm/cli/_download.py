@@ -18,7 +18,7 @@ def download(name, download_all, path):
 
     try:
         if download_all:
-            all_models = EXTRACTORS_REGISTRY.list_models + MATCHERS_REGISTRY.list_models
+            all_models = EXTRACTORS_REGISTRY.list_models() + MATCHERS_REGISTRY.list_models()
             logger.info(f"Downloading {len(all_models)} models...")
             success = 0
             failed = []
@@ -44,7 +44,7 @@ def download(name, download_all, path):
 
         else:
             if not name:
-                logger.error("Please provide --name or --all")
+                logger.error("Please provide --name")
                 sys.exit(1)
 
             if EXTRACTORS_REGISTRY.is_model(name):

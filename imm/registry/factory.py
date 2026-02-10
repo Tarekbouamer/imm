@@ -29,11 +29,12 @@ def load_state_dict(checkpoint_path: str) -> Dict[str, torch.Tensor]:
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
 
 
-def create_model(model_name: str, cfg: Dict = {}, **kwargs) -> nn.Module:
+def create_model(model_name: str, cfg: Optional[Dict] = None, **kwargs) -> nn.Module:
     """Create a model instance based on its name and optional configuration."""
     if not is_model(model_name):
         raise ValueError(f"Unknown model: {model_name}")
 
+    cfg = {} if cfg is None else cfg
     create_fn = model_entrypoint(model_name)
     return create_fn(cfg=cfg, **kwargs)
 
@@ -66,7 +67,7 @@ def is_model_pretrained(model_name: str) -> bool:
     return model_name in _model_has_pretrained
 
 
-def get_pretrainedmerge_config(model_name: str) -> dict:
+def get_pretrained_config(model_name: str) -> dict:
     """Get the pretrained configuration for a model, if available."""
     return _model_pretrained_cfgs.get(model_name, {})
 
@@ -88,7 +89,7 @@ def register_model(fn):
 
     if hasattr(mod, "default_cfgs") and model_name in mod.default_cfgs:
         cfg = mod.default_cfgs[model_name]
-        if any(key in cfg for key in ["url", "file", "drive"]):
+        if any(cfg.get(k) for k in ("url", "file", "drive")):
             _model_has_pretrained.add(model_name)
             _model_pretrained_cfgs[model_name] = cfg
 
@@ -126,9 +127,6 @@ def download_model_weights(
     Returns:
         Path: Path to the downloaded weights file.
 
-    Raises:
-        ValueError: If pretrained configuration is invalid.
-        RuntimeError: If download fails.
     """
     save_folder = Path(save_dir)
     save_folder.mkdir(parents=True, exist_ok=True)
@@ -164,12 +162,19 @@ def download_model_weights(
 
         elif "drive" in pretrained_cfg and pretrained_cfg["drive"]:
             # Download from Google Drive
-            logger.info(f"Downloading from Google Drive: {pretrained_cfg['drive']}")
-            save_path = Path(gdown.download(pretrained_cfg["drive"], str(save_path), quiet=False))
+            logger.info(
+                f"Downloading from Google Drive: {pretrained_cfg['drive']}")
+            download_result = gdown.download(
+                pretrained_cfg["drive"], str(save_path), quiet=False)
+            if not download_result:
+                raise RuntimeError(
+                    f"Google Drive download failed for {pretrained_cfg['drive']}")
+            save_path = Path(download_result)
             logger.success(f"Downloaded to {save_path}")
 
         else:
-            raise ValueError("Invalid pretrained configuration. Specify 'file', 'url', or 'drive'.")
+            raise ValueError(
+                "Invalid pretrained configuration. Specify 'file', 'url', or 'drive'.")
 
     except Exception as e:
         if save_path.exists():
@@ -205,42 +210,43 @@ def load_model_weights(
         ValueError: If the pretrained configuration is invalid.
         RuntimeError: If there's an error loading the weights.
     """
-    save_folder = Path("hub")
-    save_folder.mkdir(parents=True, exist_ok=True)
-    save_path = save_folder / f"{variant}.pth"
+    # Use download_model_weights to handle all sources uniformly
+    weights_path = download_model_weights(variant, pretrained_cfg)
 
     try:
-        if "file" in pretrained_cfg and pretrained_cfg["file"]:
-            state_dict = torch.load(pretrained_cfg["file"], map_location=device)
-        elif "url" in pretrained_cfg and pretrained_cfg["url"]:
-            state_dict = load_state_dict_from_url(pretrained_cfg["url"], map_location=device, progress=True)
-        elif "drive" in pretrained_cfg and pretrained_cfg["drive"]:
-            if not save_path.exists():
-                save_path = Path(gdown.download(pretrained_cfg["drive"], str(save_path), quiet=False))
-            state_dict = torch.load(save_path, map_location=device)
-        else:
-            raise ValueError("Invalid pretrained configuration. Specify 'file', 'url', or 'drive'.")
+        state_dict = torch.load(weights_path, map_location=device)
     except Exception as e:
-        raise RuntimeError(f"Error loading pretrained weights: {e}")
+        raise RuntimeError(
+            f"Error loading pretrained weights from {weights_path}: {e}")
 
     if state_key:
         try:
             state_dict = state_dict[state_key]
         except KeyError:
-            raise ValueError(f"State key '{state_key}' not found in the loaded state dict.")
+            raise ValueError(
+                f"State key '{state_key}' not found in the loaded state dict.")
 
     if replace:
         state_dict = {k.replace(*replace): v for k, v in state_dict.items()}
 
-    # Check for missing and unexpected keys
+    # Check for missing and unexpected keys (log only first 5 to avoid noise)
     model_state_dict = model.state_dict()
     missing_keys = [k for k in model_state_dict.keys() if k not in state_dict]
-    unexpected_keys = [k for k in state_dict.keys() if k not in model_state_dict]
+    unexpected_keys = [
+        k for k in state_dict.keys() if k not in model_state_dict]
 
     if missing_keys:
-        logger.warning(f"Missing keys in state dict: {missing_keys}")
+        keys_display = missing_keys[:5]
+        msg = f"Missing keys in state dict: {keys_display}"
+        if len(missing_keys) > 5:
+            msg += f" (and {len(missing_keys) - 5} more)"
+        logger.warning(msg)
     if unexpected_keys:
-        logger.warning(f"Unexpected keys in state dict: {unexpected_keys}")
+        keys_display = unexpected_keys[:5]
+        msg = f"Unexpected keys in state dict: {keys_display}"
+        if len(unexpected_keys) > 5:
+            msg += f" (and {len(unexpected_keys) - 5} more)"
+        logger.warning(msg)
 
     model.load_state_dict(state_dict, strict=False)
     logger.success(f"Successfully loaded pretrained weights for {variant}")

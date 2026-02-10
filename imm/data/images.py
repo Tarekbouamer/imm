@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 from loguru import logger
@@ -6,59 +7,61 @@ from torch.utils.data import Dataset
 from imm.utils.io import find_images, load_image_tensor
 
 
-def relative_path(path, root):
+def relative_path(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
 class ImagesFromList(Dataset):
     """Dataset for loading images from a directory."""
 
-    def __init__(self, root: str, max_img_size: int = -1):
+    def __init__(self, root: str, resize: int = -1):
         # root
-        self.root = root
+        self.root = Path(root)
 
         # collect image paths
-        self.images_paths = sorted(find_images(root))
+        self.images_paths = sorted(find_images(self.root))
+
+        if not self.images_paths:
+            raise FileNotFoundError(f"No images found under {self.root}")
 
         # image names
-        self.names = [relative_path(img_path, root)
+        self.names = [relative_path(img_path, self.root)
                       for img_path in self.images_paths]
 
         #
-        self.max_img_size = max_img_size
+        self.resize = resize
 
         logger.info("ImagesFromList:")
-        logger.info(f"      Images: {len(self.images_paths)} in {root}")
-        logger.info(f"      Max image size: {max_img_size}")
+        logger.info(f"      Images: {len(self.images_paths)} in {self.root}")
+        logger.info(f"      Max image size: {resize}")
 
     def __len__(self):
         return len(self.images_paths)
 
-    def get_names(self):
+    def get_names(self) -> list[str]:
         return self.names
 
-    def __getitem__(self, item):
-        out = {}
+    def __getitem__(self, item: int) -> dict:
+        if item < 0 or item >= len(self.images_paths):
+            raise IndexError(
+                f"Index {item} out of range for dataset with {len(self.images_paths)} images")
 
         img_path = self.images_paths[item]
         img_name = self.names[item]
 
         # load image
-        data = load_image_tensor(img_path, resize=self.max_img_size)
-        image = data[0]
-        image_cv = data[1]
-        scale = data[3]
-        original_size = data[4]
+        image, _, _, scale, original_size = load_image_tensor(
+            img_path, resize=self.resize)
 
-        # dict
-        out["image"] = image
-        out["name"] = img_name
-        out["original_size"] = original_size
-        out["scale"] = scale
-
-        return out
+        return {
+            "image": image,
+            "name": img_name,
+            "path": str(img_path),
+            "original_size": original_size,
+            "scale": scale,
+        }
 
     def __repr__(self):
         return (
-            f"ImagesFromList(root={self.root}, num_images={len(self.images_paths)}, max_img_size={self.max_img_size})"
+            f"ImagesFromList(root={self.root}, num_images={len(self.images_paths)}, resize={self.resize})"
         )

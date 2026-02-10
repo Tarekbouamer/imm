@@ -10,20 +10,18 @@ def pose_error(
     R_gt: np.ndarray,
     t_gt: np.ndarray,
 ) -> Tuple[float, float]:
-    """
-    Compute pose error between estimated and ground truth pose.
+    """Compute rotation and translation errors in degrees.
 
-    Args:
-        R_est: Estimated rotation matrix (3, 3).
-        t_est: Estimated translation vector (3,) or (3, 1).
-        R_gt: Ground truth rotation matrix (3, 3).
-        t_gt: Ground truth translation vector (3,) or (3, 1).
-
-    Returns:
-        Tuple of (rotation_error_degrees, translation_error_degrees).
-            - rotation_error: Angular error in degrees
-            - translation_error: Angular error of translation direction in degrees
+    Returns: (rotation_error_deg, translation_error_deg)
     """
+    # Validate shapes
+    assert R_est.shape == (3, 3), f"R_est must be (3, 3), got {R_est.shape}"
+    assert R_gt.shape == (3, 3), f"R_gt must be (3, 3), got {R_gt.shape}"
+    t_est = np.asarray(t_est).reshape(-1)
+    t_gt = np.asarray(t_gt).reshape(-1)
+    assert len(t_est) == 3, f"t_est must have 3 elements, got {len(t_est)}"
+    assert len(t_gt) == 3, f"t_gt must have 3 elements, got {len(t_gt)}"
+
     # Rotation error
     R_err = R_gt.T @ R_est
     trace = np.trace(R_err)
@@ -50,18 +48,15 @@ def epipolar_error(
     pts2: np.ndarray,
     method: str = "sampson",
 ) -> np.ndarray:
-    """
-    Compute epipolar distance/error for point correspondences.
+    """Compute epipolar distance. method: 'sampson' or 'symmetric'."""
+    # Validate shapes
+    assert F.shape == (3, 3), f"F must be (3, 3), got {F.shape}"
+    assert pts1.ndim == 2 and pts1.shape[
+        1] == 2, f"pts1 must be (N, 2), got {pts1.shape}"
+    assert pts2.ndim == 2 and pts2.shape[
+        1] == 2, f"pts2 must be (N, 2), got {pts2.shape}"
+    assert pts1.shape == pts2.shape, f"pts1 and pts2 must have same shape, got {pts1.shape} vs {pts2.shape}"
 
-    Args:
-        F: Fundamental matrix (3, 3).
-        pts1: Points in first image (N, 2).
-        pts2: Points in second image (N, 2).
-        method: "sampson" or "symmetric" epipolar distance.
-
-    Returns:
-        Epipolar errors (N,).
-    """
     # Convert to homogeneous coordinates
     pts1_h = np.column_stack([pts1, np.ones(len(pts1))])
     pts2_h = np.column_stack([pts2, np.ones(len(pts2))])
@@ -105,19 +100,19 @@ def reprojection_error(
     R: np.ndarray,
     t: np.ndarray,
 ) -> np.ndarray:
-    """
-    Compute reprojection error for 3D-2D correspondences.
+    """Compute reprojection error for 3D-2D correspondences."""
+    # Validate shapes
+    assert pts_2d.ndim == 2 and pts_2d.shape[
+        1] == 2, f"pts_2d must be (N, 2), got {pts_2d.shape}"
+    assert pts_3d.ndim == 2 and pts_3d.shape[
+        1] == 3, f"pts_3d must be (N, 3), got {pts_3d.shape}"
+    assert pts_2d.shape[0] == pts_3d.shape[
+        0], f"pts_2d and pts_3d must have same N, got {pts_2d.shape[0]} vs {pts_3d.shape[0]}"
+    assert K.shape == (3, 3), f"K must be (3, 3), got {K.shape}"
+    assert R.shape == (3, 3), f"R must be (3, 3), got {R.shape}"
+    t = np.asarray(t).reshape(-1)
+    assert len(t) == 3, f"t must have 3 elements, got {len(t)}"
 
-    Args:
-        pts_2d: 2D points (N, 2).
-        pts_3d: 3D points (N, 3).
-        K: Camera intrinsic matrix (3, 3).
-        R: Rotation matrix (3, 3).
-        t: Translation vector (3,) or (3, 1).
-
-    Returns:
-        Reprojection errors (N,).
-    """
     t = t.reshape(3, 1)
 
     # Project 3D points
@@ -134,17 +129,15 @@ def reprojection_error(
 
 
 def homography_error(H: np.ndarray, pts1: np.ndarray, pts2: np.ndarray) -> np.ndarray:
-    """
-    Compute reprojection error under homography.
+    """Compute reprojection error under homography."""
+    # Validate shapes
+    assert H.shape == (3, 3), f"H must be (3, 3), got {H.shape}"
+    assert pts1.ndim == 2 and pts1.shape[
+        1] == 2, f"pts1 must be (N, 2), got {pts1.shape}"
+    assert pts2.ndim == 2 and pts2.shape[
+        1] == 2, f"pts2 must be (N, 2), got {pts2.shape}"
+    assert pts1.shape == pts2.shape, f"pts1 and pts2 must have same shape, got {pts1.shape} vs {pts2.shape}"
 
-    Args:
-        H: Homography matrix (3, 3).
-        pts1: Points in first image (N, 2).
-        pts2: Points in second image (N, 2).
-
-    Returns:
-        Reprojection errors (N,).
-    """
     # Convert to homogeneous
     pts1_h = np.column_stack([pts1, np.ones(len(pts1))])
 
@@ -156,63 +149,34 @@ def homography_error(H: np.ndarray, pts1: np.ndarray, pts2: np.ndarray) -> np.nd
     return np.linalg.norm(pts2 - pts2_pred, axis=1)
 
 
-def compute_auc(errors: np.ndarray, thresholds: Optional[np.ndarray] = None, max_threshold: float = 10.0) -> float:
-    """
-    Compute Area Under Curve (AUC) for error distribution.
-
-    AUC measures the fraction of samples with error below threshold, integrated over thresholds.
-
-    Args:
-        errors: Error values (N,).
-        thresholds: Threshold values for computing curve. If None, uses linspace from 0 to max_threshold.
-        max_threshold: Maximum threshold value if thresholds is None.
-
-    Returns:
-        AUC value (normalized to [0, 1]).
-    """
-    if thresholds is None:
-        thresholds = np.linspace(0, max_threshold, 100)
-
-    # Compute fraction of errors below each threshold
-    accuracies = np.array([np.mean(errors <= t) for t in thresholds])
-
-    # Compute AUC using trapezoidal rule, normalized by threshold range
-    auc = np.trapz(accuracies, thresholds) / max_threshold
-
-    return auc
-
-
-
-def compute_precision_recall_curve(
+def compute_auc(
     errors: np.ndarray,
     thresholds: Optional[np.ndarray] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+    max_threshold: float = 10.0,
+    num: int = 100,
+) -> float:
+    """Compute AUC of inlier rate vs threshold.
     """
-    Compute precision-recall curve for errors.
+    errors = np.asarray(errors, dtype=np.float64).reshape(-1)
 
-    Args:
-        errors: Error values (N,).
-        thresholds: Threshold values. If None, uses unique sorted error values.
-
-    Returns:
-        Tuple of (precisions, recalls) arrays.
-    """
     if thresholds is None:
-        thresholds = np.sort(np.unique(errors))
+        thresholds = np.linspace(0.0, float(
+            max_threshold), int(num), dtype=np.float64)
+        norm = float(max_threshold)
+    else:
+        thresholds = np.asarray(thresholds, dtype=np.float64).reshape(-1)
+        if thresholds.size < 2:
+            raise ValueError("thresholds must contain at least 2 values")
+        thresholds = np.sort(thresholds)
+        norm = float(thresholds[-1] - thresholds[0])
+        if norm <= 0:
+            raise ValueError("thresholds must span a positive range")
 
-    precisions = []
-    recalls = []
+    # Vectorized inlier-rate curve
+    accuracies = (errors[:, None] <= thresholds[None, :]).mean(axis=0)
 
-    for threshold in thresholds:
-        inliers = errors <= threshold
-        recall = np.mean(inliers)
-        # For geometric errors, precision = recall (all predictions are considered)
-        precision = recall
-
-        precisions.append(precision)
-        recalls.append(recall)
-
-    return np.array(precisions), np.array(recalls)
+    auc = float(np.trapz(accuracies, thresholds) / norm)
+    return auc
 
 
 def pose_auc(
@@ -223,20 +187,17 @@ def pose_auc(
     max_rot_error: float = 10.0,
     max_trans_error: float = 10.0,
 ) -> Dict[str, float]:
-    """
-    Compute AUC for pose errors.
+    """Compute AUC for pose errors."""
+    # Validate shapes
+    assert R_est.shape == (3, 3), f"R_est must be (3, 3), got {R_est.shape}"
+    assert R_gt.shape == (3, 3), f"R_gt must be (3, 3), got {R_gt.shape}"
+    t_est_flat = np.asarray(t_est).reshape(-1)
+    t_gt_flat = np.asarray(t_gt).reshape(-1)
+    assert len(
+        t_est_flat) == 3, f"t_est must have 3 elements, got {len(t_est_flat)}"
+    assert len(
+        t_gt_flat) == 3, f"t_gt must have 3 elements, got {len(t_gt_flat)}"
 
-    Args:
-        R_est: Estimated rotation matrix (3, 3).
-        t_est: Estimated translation vector (3,) or (3, 1).
-        R_gt: Ground truth rotation matrix (3, 3).
-        t_gt: Ground truth translation vector (3,) or (3, 1).
-        max_rot_error: Maximum rotation error threshold in degrees.
-        max_trans_error: Maximum translation error threshold in degrees.
-
-    Returns:
-        Dictionary with rotation_auc, translation_auc, and combined_auc.
-    """
     rot_err, trans_err = pose_error(R_est, t_est, R_gt, t_gt)
 
     # For single pose, create threshold arrays
@@ -262,4 +223,3 @@ def pose_auc(
         "rotation_error": rot_err,
         "translation_error": trans_err,
     }
-

@@ -1,32 +1,25 @@
 from typing import Dict, Optional
 
+import cv2
 import numpy as np
 from loguru import logger
+from scipy.spatial.transform import Rotation
 
-from imm.estimators._camera import Camera
+from imm.geometry import Camera
 from imm.utils.check import CHECK_SHAPE, CHECK_TYPE
 
 from ._helper import get_backend
 from .estimator import Estimator
 
 try:
-    import pycolmap
-except ImportError:
-    pycolmap = None
-    logger.warning("Pycolmap not found. PycolmapPnPEstimator will not work.")
-
-try:
     import poselib
 except ImportError:
     poselib = None
-    logger.warning("PoseLib not found. PoseLibPnPEstimator will not work.")
-
 
 try:
-    import cv2
+    import pycolmap
 except ImportError:
-    cv2 = None
-    logger.warning("OpenCV not found. OpenCVPnPEstimator will not work.")
+    pycolmap = None
 
 
 class OpenCVPnPEstimator(Estimator):
@@ -61,7 +54,8 @@ class OpenCVPnPEstimator(Estimator):
         try:
             #
             if len(pts2d) < 4:
-                logger.warning(f"Not enough points to estimate pose less than 4: {len(pts2d)}")
+                logger.warning(
+                    f"Not enough points to estimate pose less than 4: {len(pts2d)}")
                 return {
                     "qvec": None,
                     "tvec": None,
@@ -103,7 +97,8 @@ class OpenCVPnPEstimator(Estimator):
             }
 
         except Exception as e:
-            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shapes: {pts2d.shape}, {pts3d.shape}")
+            logger.error(
+                f"Error in {self.__class__.__name__}: {e}, Input shapes: {pts2d.shape}, {pts3d.shape}")
             return {
                 "qvec": None,
                 "tvec": None,
@@ -116,6 +111,8 @@ class OpenCVPnPEstimator(Estimator):
 
 class PycolmapPnPEstimator(Estimator):
     def __init__(self, max_reproj_error=12.0, **kwargs):
+        if pycolmap is None:
+            raise ImportError("PycolmapPnPEstimator requires pycolmap")
         self.max_reproj_error = max_reproj_error
 
         self.estimation_options = {
@@ -150,7 +147,8 @@ class PycolmapPnPEstimator(Estimator):
         try:
             #
             if len(pts2d) < 4:
-                logger.warning(f"Not enough points to estimate pose less than 4: {len(pts2d)}")
+                logger.warning(
+                    f"Not enough points to estimate pose less than 4: {len(pts2d)}")
                 return {
                     "qvec": None,
                     "tvec": None,
@@ -179,7 +177,8 @@ class PycolmapPnPEstimator(Estimator):
             }
 
         except Exception as e:
-            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shapes: {pts2d.shape}, {pts3d.shape}")
+            logger.error(
+                f"Error in {self.__class__.__name__}: {e}, Input shapes: {pts2d.shape}, {pts3d.shape}")
             return {
                 "qvec": None,
                 "tvec": None,
@@ -193,6 +192,8 @@ class PycolmapPnPEstimator(Estimator):
 
 class PoseLibPnPEstimator(Estimator):
     def __init__(self, max_reproj_error=12.0, max_epipolar_error=1.0, max_iterations=100, **kwargs):
+        if poselib is None:
+            raise ImportError("PoseLibPnPEstimator requires poselib")
         self.max_reproj_error = max_reproj_error
         self.max_epipolar_error = max_epipolar_error
         self.max_iterations = max_iterations
@@ -229,7 +230,8 @@ class PoseLibPnPEstimator(Estimator):
 
         try:
             if len(pts2d) < 4:
-                logger.warning(f"Not enough points to estimate pose less than 4: {len(pts2d)}")
+                logger.warning(
+                    f"Not enough points to estimate pose less than 4: {len(pts2d)}")
                 return {
                     "qvec": None,
                     "tvec": None,
@@ -261,7 +263,8 @@ class PoseLibPnPEstimator(Estimator):
                 "inliers": info["inliers"],
             }
         except Exception as e:
-            logger.error(f"Error in {self.__class__.__name__}: {e}, Input shapes: {pts2d.shape}, {pts3d.shape}")
+            logger.error(
+                f"Error in {self.__class__.__name__}: {e}, Input shapes: {pts2d.shape}, {pts3d.shape}")
             return {
                 "qvec": None,
                 "tvec": None,
@@ -297,12 +300,14 @@ class PnPEstimator(Estimator):
         super().__init__()
 
         # Choose the backend
-        backend = backend if not None else get_backend()
+        backend = backend if backend is not None else get_backend()
 
         if backend == "opencv":
-            self.estimator = OpenCVPnPEstimator(max_reproj_error=max_reproj_error, **kwargs)
+            self.estimator = OpenCVPnPEstimator(
+                max_reproj_error=max_reproj_error, **kwargs)
         elif backend == "pycolmap":
-            self.estimator = PycolmapPnPEstimator(max_reproj_error=max_reproj_error, **kwargs)
+            self.estimator = PycolmapPnPEstimator(
+                max_reproj_error=max_reproj_error, **kwargs)
         elif backend == "poselib":
             self.estimator = PoseLibPnPEstimator(
                 max_reproj_error=max_reproj_error,
@@ -311,7 +316,8 @@ class PnPEstimator(Estimator):
                 **kwargs,
             )
         else:
-            raise ValueError(f"Invalid backend: {backend}. Valid options are: ['opencv', 'pycolmap', 'poselib']")
+            raise ValueError(
+                f"Invalid backend: {backend}. Valid options are: ['opencv', 'pycolmap', 'poselib']")
 
     def estimate(self, pts2d: np.ndarray, pts3d: np.ndarray, camera: Camera, **kwargs) -> Dict:
         """Estimate the pose.
@@ -329,48 +335,7 @@ class PnPEstimator(Estimator):
                 - inliers (Optional[int]): Number of inliers
 
         """
-<<<<<<< HEAD
         return self.estimator.estimate(pts2d, pts3d, camera, **kwargs)
-=======
-
-        #
-        pts2d = pts2d.reshape(-1, 2)
-        pts3d = pts3d.reshape(-1, 3)
-
-        # Convert camera dictionary to camera matrix
-        cam_matrix = np.array(
-            [[camera["params"][0], 0, camera["params"][2]], [
-                0, camera["params"][1], camera["params"][3]], [0, 0, 1]]
-        )
-
-        # Solve PnP
-        success, rotation, translation = cv2.solvePnP(
-            pts3d,
-            pts2d,
-            cam_matrix,
-            dist,
-        )
-
-        # Convert rotation vector to quaternion
-        rvec = rotation.ravel()
-        R = cv2.Rodrigues(rvec)[0]
-
-        # Convert rotation matrix to quaternion
-        w = np.sqrt(1.0 + R[0, 0] + R[1, 1] + R[2, 2]) / 2.0
-        w4 = 4.0 * w
-        x = (R[2, 1] - R[1, 2]) / w4
-        y = (R[0, 2] - R[2, 0]) / w4
-        z = (R[1, 0] - R[0, 1]) / w4
-        qvec = np.array([w, x, y, z])
-
-        result = {
-            "qvec": qvec,
-            "tvec": translation.ravel(),
-            "success": success,
-        }
-
-        return result
->>>>>>> 5e32819 (feat: Add utility functions for configuration merging and key extension)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(estimator={self.estimator})"

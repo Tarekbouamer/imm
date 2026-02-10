@@ -1,7 +1,6 @@
 from .camera import Camera
 from .metrics import (
     compute_auc,
-    compute_precision_recall_curve,
     epipolar_error,
     homography_error,
     pose_auc,
@@ -18,6 +17,5 @@ __all__ = [
     "reprojection_error",
     "homography_error",
     "compute_auc",
-    "compute_precision_recall_curve",
     "pose_auc",
 ]

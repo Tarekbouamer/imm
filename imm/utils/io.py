@@ -13,16 +13,19 @@ INTER_MODES: dict = {
     "area": cv2.INTER_AREA,
 }
 
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+
 
 def find_images(root: Path, output_file: Optional[Path] = None) -> List[Path]:
     """Find images in path and subdirectories."""
 
     # Search for image files in the specified path
-    image_files = [
-        file
-        for ext in {"jpg", "jpeg", "png"}
-        for file in list(root.rglob(f"*.{ext}")) + list(root.rglob(f"*.{ext.upper()}"))
-    ]
+    root = Path(root)
+
+    image_files = sorted(
+        {p for p in root.rglob("*") if p.is_file()
+         and p.suffix.lower() in _IMAGE_EXTS}
+    )
 
     #
     if not image_files:
@@ -32,15 +35,12 @@ def find_images(root: Path, output_file: Optional[Path] = None) -> List[Path]:
     if output_file is None:
         output_file = root / "image_list.txt"
 
-    try:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with output_file.open("w") as f:
-            for image_file in image_files:
-                relative_path = image_file.relative_to(root)
-                f.write(f"{relative_path}\n")
-        logger.info(f"Image list written to {output_file}")
-    except Exception as e:
-        logger.error(f"Error writing to {output_file}: {e}")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_file.open("w") as f:
+        for p in image_files:
+            f.write(f"{p.relative_to(root)}\n")
+
+    logger.info(f"Image list written to {output_file}")
 
     return image_files
 
@@ -96,21 +96,25 @@ def read_image(image: Union[np.ndarray, str, Path], gray: bool = False):
     """Read image from path or validate array, return RGB image with size."""
     # read image
     if isinstance(image, (str, Path)):
-        image = cv2.imread(str(image))
-        if image is None:
+        img = cv2.imread(str(image), cv2.IMREAD_COLOR)
+        if img is None:
             raise ValueError(f"Failed to load image from path: {image}")
-    elif not isinstance(image, np.ndarray):
+    elif isinstance(image, np.ndarray):
+        img = image
+    else:
         raise ValueError("Input should be a file path or a numpy.ndarray")
 
     # Convert color
     if gray:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if img.ndim == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if img.ndim == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     # size
-    size = (image.shape[1], image.shape[0])
-    return image, size
+    size = (img.shape[1], img.shape[0])  # (width, height)
+    return img, size
 
 
 def load_image(
@@ -152,6 +156,7 @@ def toImageTensor(cv_img, padding=False):
     if cv_img.ndim < 3:
         cv_img = np.expand_dims(cv_img, axis=-1)
 
+    # FIXME: this may cause issues if the input image is not in HWC format
     #
     w_new, h_new, _ = cv_img.shape
 

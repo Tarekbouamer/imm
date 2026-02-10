@@ -1,3 +1,3 @@
-from .writers import AsycMatchesWriter, FeaturesWriter, H5Writer, MatchesWriter
+from .writers import AsyncMatchesWriter, FeaturesWriter, H5Writer, MatchesWriter
 
-__all__ = ["H5Writer", "FeaturesWriter", "MatchesWriter", "AsycMatchesWriter"]
+__all__ = ["H5Writer", "FeaturesWriter", "MatchesWriter", "AsyncMatchesWriter"]

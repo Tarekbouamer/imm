@@ -11,12 +11,12 @@ from imm.utils.io import read_image
 
 def list_extractors():
     """List all available feature extractors."""
-    return EXTRACTORS_REGISTRY.list_models
+    return EXTRACTORS_REGISTRY.list_models()
 
 
 def list_matchers():
     """List all available feature matchers."""
-    return MATCHERS_REGISTRY.list_models
+    return MATCHERS_REGISTRY.list_models()
 
 
 __all__ = [

@@ -1,41 +1,106 @@
-import json
+import os
 import time
-from datetime import datetime
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import click
 import h5py
+import matplotlib
 import torch
 from loguru import logger
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
-from imm.extractors._helper import create_extractor
-from imm.settings import img0_path
+# Set matplotlib backend before any pyplot imports
+if not os.environ.get("DISPLAY"):
+    matplotlib.use("Agg")
+
 from imm.data import ImagesFromList
+from imm.extractors._helper import create_extractor
 from imm.utils.device import detect_device, to_cpu, to_cuda, to_numpy
 from imm.utils.io import load_image_tensor
-from imm.writers import FeaturesWriter
-from imm.utils import create_extraction_manifest, save_manifest
+from imm.utils.manifest import save_extraction_manifest
 from imm.viz import KeypointVisualizer
+from imm.writers import FeaturesWriter
+
+
+def filter_existing_extractions(dataset, save_path: Path, manifest_path: Path):
+    """Read existing extractions and filter dataset to skip already extracted images.
+    """
+    # Read existing extractions from HDF5 file
+    existing_keys = set()
+    if save_path.exists():
+        try:
+            with h5py.File(save_path, "r") as h5_file:
+                existing_keys = set(h5_file.keys())
+        except Exception as e:
+            logger.warning(f"Could not read HDF5 file: {e}")
+    # Filter dataset based on existing extractions
+    skipped_count = 0
+    if existing_keys and hasattr(dataset, 'images_paths'):
+        indices = [
+            i for i, p in enumerate(dataset.images_paths)
+            if p.name not in existing_keys
+        ]
+        skipped_count = len(dataset.images_paths) - len(indices)
+        if skipped_count > 0:
+            logger.warning(
+                f"Skipping {skipped_count} already extracted images")
+
+        if not indices:
+            logger.warning("All images already extracted")
+            early_result = ExtractionResult(
+                output_file=save_path,
+                manifest_path=manifest_path,
+                processed_images=[],
+                skipped_images=skipped_count,
+                failed_images=0,
+                total_time=0.0,
+            )
+            return dataset, skipped_count, early_result
+
+        dataset = Subset(dataset, indices)
+
+    return dataset, skipped_count, None
+
+
+@dataclass
+class ExtractionResult:
+    """Result from dataset extraction."""
+    output_file: Path
+    manifest_path: Path
+    processed_images: list[str]
+    skipped_images: int
+    failed_images: int
+    total_time: float
+    keypoint_counts: Optional[list[int]] = None
+    processing_times_ms: Optional[list[float]] = None
 
 
 class Extraction:
-    def __init__(self, extractor: str, cfg: Optional[Dict[str, Any]] = None, device: str = "cpu", **kwargs: Any):
+    def __init__(self, extractor: str, extractor_cfg: Optional[Dict[str, Any]] = None, device: str = "cpu", **kwargs: Any):
         """
         Initializes the feature extractor .
         """
         self.device = device
-        self.extractor = create_extractor(name=extractor, cfg=cfg, **kwargs)
+        self.extractor = create_extractor(
+            name=extractor, cfg=extractor_cfg, **kwargs)
         self.extractor.to(self.device)
         self.extractor.eval()
         logger.info(f"Initialized {extractor} extractor on {device}")
 
     @torch.inference_mode()
-    def extract_single_image(self, data: Dict[str, torch.Tensor]) -> Dict[str, Any]:
+    def extract_image(self, data: Mapping[str, Any]) -> Dict[str, Any]:
         """
         Extracts features from a single input.
+
+        Args:
+            data: Batch data containing tensors and metadata (image, name, original_size, etc.)
+
+        Returns:
+            Dictionary of extracted features as numpy arrays
         """
         data = to_cuda(data) if self.device == "cuda" else to_cpu(data)
         preds = self.extractor.extract(data)
@@ -65,82 +130,75 @@ class Extraction:
         num_workers: int = 4,
         print_freq: int = 40,
         override: bool = False,
-    ) -> None:
+        dataloader: Optional[torch.utils.data.DataLoader] = None,
+        dataloader_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> ExtractionResult:
         """
         Extracts features from a dataset and saves them to an HDF5 file.
         """
-        # Get existing images from HDF5 if not override
-        existing_images = set()
-        skipped_count = 0
-        if not override and save_path.exists():
-            try:
-                with h5py.File(save_path, "r") as h5_file:
-                    existing_images = set(h5_file.keys())
-                logger.info(
-                    f"Found {len(existing_images)} already extracted images")
-            except Exception as e:
-                logger.warning(f"Could not read HDF5 file: {e}")
+        manifest_path = save_path.parent / "extraction_manifest.json"
 
         # Filter dataset to skip already extracted images
-        if existing_images:
-            original_count = len(dataset.images_paths)
-            dataset.images_paths = [
-                p for p in dataset.images_paths if p.stem not in existing_images]
-            skipped_count = original_count - len(dataset.images_paths)
-            logger.info(f"Skipping {skipped_count} already extracted images")
+        if not override:
+            dataset, skipped_count, early_result = filter_existing_extractions(
+                dataset, save_path, manifest_path
+            )
+            if early_result:
+                return early_result
+        else:
+            skipped_count = 0
 
-        if len(dataset.images_paths) == 0:
-            logger.info("All images already extracted")
-            return
+        # Create or use provided DataLoader
+        if dataloader is None:
+            dl_kwargs = dataloader_kwargs or {}
+            dataloader = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                pin_memory=True if self.device == "cuda" else False,
+                prefetch_factor=2 if num_workers > 0 else None,
+                persistent_workers=True if num_workers > 0 else False,
+                **dl_kwargs,
+            )
 
-        dataloader = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True if self.device == "cuda" else False,
-            prefetch_factor=2 if num_workers > 0 else None,
-            persistent_workers=True if num_workers > 0 else False,
-        )
-        writer = FeaturesWriter(save_path)
+        # Set up HDF5 writer
+        with FeaturesWriter(save_path) as writer:
+            start_time = time.time()
+            processed_images = []
+            keypoint_counts = []
+            processing_times = []
+            failed_count = 0
 
-        start_time = time.time()
-        processed_images = []
-        keypoint_counts = []
-        processing_times = []
-        failed_count = 0
+            for idx, data in enumerate(tqdm(dataloader, desc="Extracting".rjust(15), colour="blue")):
+                name = data["name"][0]
+                original_size = data["original_size"][0]
 
-        for idx, data in enumerate(tqdm(dataloader, desc="Extracting".rjust(15), colour="blue")):
-            name = data["name"][0]
-            original_size = data["original_size"][0]
+                img_start = time.time()
+                try:
+                    # Extract features
+                    preds = self.extract_image(data)
+                    preds = {k: v[0] if isinstance(
+                        v, (list, tuple)) else v for k, v in preds.items()}
 
-            img_start = time.time()
-            try:
-                # Extract features
-                preds = self.extract_single_image(data)
-                preds = {k: v[0] if isinstance(
-                    v, (List, Tuple)) else v for k, v in preds.items()}
+                    # Save features to HDF5 file
+                    preds["original_size"] = original_size
+                    writer.write_features(name, preds)
+                    processed_images.append(name)
 
-                # Save features to HDF5 file
-                preds["original_size"] = original_size
-                writer.write_features(name, preds)
-                processed_images.append(name)
+                    # Track statistics
+                    if "kpts" in preds:
+                        keypoint_counts.append(len(preds["kpts"]))
+                    processing_times.append((time.time() - img_start) * 1000)
 
-                # Track statistics
-                if "keypoints" in preds:
-                    keypoint_counts.append(len(preds["keypoints"]))
-                processing_times.append((time.time() - img_start) * 1000)
+                    # Print extraction details
+                    if (idx + 1) % print_freq == 0:
+                        self.print_extraction_details(idx, name, preds)
 
-                # Print extraction details
-                if (idx + 1) % print_freq == 0:
-                    self.print_extraction_details(idx, name, preds)
+                except Exception as e:
+                    logger.exception(f"Failed to extract {name}")
+                    failed_count += 1
+                    continue
 
-            except Exception as e:
-                logger.error(f"Failed to extract {name}: {e}")
-                manifest_writer.add_error(name, str(e))
-                failed_count += 1
-                continue
-
-        writer.close()
         total_time = time.time() - start_time
 
         # Get extractor config
@@ -150,129 +208,225 @@ class Extraction:
         }
 
         # Save manifest with statistics
-        manifest_path = save_path.parent / f"{save_path.stem}_manifest.json"
-        manifest = create_extraction_manifest(
+        manifest_path = save_path.parent / "extraction_manifest.json"
+        save_extraction_manifest(
             extractor_name=self.extractor.__class__.__name__,
             config=config,
             device=self.device,
             total_time=total_time,
             processed_images=processed_images,
-            output_file=str(save_path),
+            manifest_path=manifest_path,
             skipped_images=skipped_count,
             failed_images=failed_count,
             keypoint_counts=keypoint_counts if keypoint_counts else None,
             processing_times_ms=processing_times if processing_times else None,
-            resume_mode=not override and len(existing_images) > 0,
+            resume_mode=not override and skipped_count > 0,
         )
-        save_manifest(manifest, manifest_path)
 
         logger.info(f"Features saved to {save_path}")
         logger.info(f"Total extraction time: {total_time:.2f} seconds")
+
+        return ExtractionResult(
+            output_file=save_path,
+            manifest_path=manifest_path,
+            processed_images=processed_images,
+            skipped_images=skipped_count,
+            failed_images=failed_count,
+            total_time=total_time,
+            keypoint_counts=keypoint_counts if keypoint_counts else None,
+            processing_times_ms=processing_times if processing_times else None,
+        )
 
     def __repr__(self):
         return f"{self.__class__.__name__}(extractor={self.extractor}, device={self.device})"
 
 
-@click.command()
-@click.option("--img_path", default=img0_path, help="Path to the image or dataset")
-@click.option("--extractor", default="superpoint", help="Extractor name")
-@click.option("--max_keypoints", default=-1, help="Maximum number of keypoints")
-@click.option("--det_thd", default=0.0, help="Detector threshold")
-@click.option("--resize", default=640, help="Resize to max dimension")
-@click.option("--output", default=None, help="Directory to save extracted features")
-@click.option("--show", is_flag=True, help="Display visualization")
-@click.option("--batch_size", default=1, help="Batch size for dataset extraction")
-@click.option("--num_workers", default=4, help="Number of workers for DataLoader")
-@click.option("--override", is_flag=True, help="Override existing extracted features")
-@click.option("--print_freq", default=100, help="Frequency to print extraction details")
-@click.option("--force_cpu", is_flag=True, help="Force using CPU")
-@click.help_option("--help", "-h")
-def extract(
+def extract_image(
     img_path: str,
     extractor: str,
     max_keypoints: int,
-    det_thd: float,
     resize: int,
     output: Optional[str],
     show: bool,
+    force_cpu: bool,
+) -> None:
+    """Extract features from a single image.
+
+    Args:
+        img_path: Path to the image file
+        extractor: Name of the extractor model
+        max_keypoints: Maximum number of keypoints to extract
+        resize: Resize image to max dimension
+        output: Directory to save visualization
+        show: Display visualization
+        force_cpu: Force CPU usage
+    """
+    device = detect_device(force_cpu)
+    extraction = Extraction(extractor=extractor, extractor_cfg={
+        "max_keypoints": max_keypoints}, device=device)
+
+    img_path = Path(img_path)
+    logger.info(f"Extracting features from {img_path}")
+
+    # Load image
+    data = load_image_tensor(str(img_path), resize)
+    image, image_cv = data[0], data[1]
+
+    # Extract features from a single image
+    preds = extraction.extract_image({"image": image})
+
+    # Flatten the output
+    preds = {k: v[0] if isinstance(
+        v, (list, tuple)) else v for k, v in preds.items()}
+
+    # Extract keypoints, scores, and descriptors
+    kpts = preds.get("kpts", None)
+    scores = preds.get("scores", None)
+    descs = preds.get("desc", None)
+
+    logger.info(f"Keypoints: {kpts.shape if kpts is not None else 0}")
+    logger.info(f"Descriptors: {descs.shape if descs is not None else 0}")
+
+    # Visualize keypoints
+    visualizer = KeypointVisualizer()
+    visualizer.draw_keypoints(image_cv, kpts, scores, show_image=show)
+
+    if output:
+        output_dir = Path(output)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / f"keypoints_{img_path.stem}.png"
+        visualizer.save(str(output_file))
+        logger.info(f"Visualization saved to {output_file}")
+
+    logger.success("Image extraction completed")
+
+
+def extract_dataset(
+    dataset_dir: str,
+    output: str,
+    extractor: str,
+    max_keypoints: int,
+    resize: int,
     batch_size: int,
     num_workers: int,
     override: bool,
     print_freq: int,
     force_cpu: bool,
-):
-    """Extracts features from an image or a dataset."""
-    #  device
+) -> None:
+    """Extract features from a dataset of images.
+
+    Args:
+        dataset_dir: Path to the dataset directory
+        output: Output directory for extracted features
+        extractor: Name of the extractor model
+        max_keypoints: Maximum number of keypoints to extract
+        resize: Resize images to max dimension
+        batch_size: Batch size for extraction
+        num_workers: Number of DataLoader workers
+        override: Override existing extracted features
+        print_freq: Print frequency for extraction details
+        force_cpu: Force CPU usage
+    """
     device = detect_device(force_cpu)
+    extraction = Extraction(extractor=extractor, extractor_cfg={
+        "max_keypoints": max_keypoints}, device=device)
 
-    if det_thd > 0:
-        raise NotImplementedError("Detector threshold is not implemented yet.")
+    # Create a dataset from the directory
+    dataset = ImagesFromList(Path(dataset_dir), resize=resize)
 
-    # Feature extractor
-    extractor = Extraction(extractor=extractor, cfg={
-                           "max_keypoints": max_keypoints}, device=device)
+    # Set up save path for dataset features
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / "features.h5"
 
-    img_path = Path(img_path)
-    if img_path.is_file():
-        logger.info(f"Extracting features from {img_path}")
+    # Extract features from the dataset
+    result = extraction.extract_dataset(
+        dataset=dataset,
+        save_path=save_path,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        print_freq=print_freq,
+        override=override,
+    )
 
-        # Load image
-        data = load_image_tensor(str(img_path), resize)
-        image, image_cv = data[0], data[1]
+    logger.success(f"Dataset extraction completed. Results saved to {output}")
 
-        # Extract features from a single image
-        preds = extractor.extract_single_image({"image": image})
 
-        # Flatten the output
-        preds = {k: v[0] if isinstance(
-            v, list) else v for k, v in preds.items()}
+@click.group()
+@click.help_option("--help", "-h")
+def cli():
+    """Extract features from {image, dataset}."""
+    pass
 
-        # Extract keypoints, scores, and descriptors
-        kpts = preds.get("kpts", None)
-        scores = preds.get("scores", None)
-        descs = preds.get("desc", None)
 
-        logger.info(f"Keypoints: {kpts.shape if kpts is not None else 0}")
-        logger.info(f"Descriptors: {descs.shape if descs is not None else 0}")
+@cli.command('image')
+@click.argument("img_path", type=click.Path(exists=True, file_okay=True, dir_okay=False))
+@click.option("--extractor", default="superpoint", help="Extractor name")
+@click.option("--max_keypoints", default=-1, type=int, help="Maximum number of keypoints")
+@click.option("--resize", default=640, type=int, help="Resize to max dimension")
+@click.option("--output", default=None, help="Directory to save extracted features")
+@click.option("--show", is_flag=True, help="Display visualization")
+@click.option("--force_cpu", is_flag=True, help="Force using CPU")
+@click.help_option("--help", "-h")
+def cmd_extract_image(
+    img_path: str,
+    extractor: str,
+    max_keypoints: int,
+    resize: int,
+    output: Optional[str],
+    show: bool,
+    force_cpu: bool,
+) -> None:
+    """Extract features from a single image."""
+    extract_image(
+        img_path=img_path,
+        extractor=extractor,
+        max_keypoints=max_keypoints,
+        resize=resize,
+        output=output,
+        show=show,
+        force_cpu=force_cpu,
+    )
 
-        # Visualize keypoints
-        visualizer = KeypointVisualizer()
-        visualizer.draw_keypoints(image_cv, kpts, scores, show_image=show)
 
-        if output:
-            output_dir = Path(output)
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output_file = output_dir / f"keypoints_{img_path.stem}.png"
-            visualizer.save(str(output_file))
-            logger.info(f"Visualization saved to {output_file}")
-
-        return preds
-
-    elif img_path.is_dir():
-        # Create a dataset from the directory
-        dataset = ImagesFromList(img_path, max_img_size=resize)
-
-        # Set up save path for dataset features
-        output_dir = Path(output)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        save_path = output_dir / "features.h5"
-
-        # Extract features from the dataset
-        extractor.extract_dataset(
-            dataset=dataset,
-            save_path=save_path,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            print_freq=print_freq,
-            override=override,
-        )
-
-        return save_path
-    else:
-        logger.error(
-            f"Invalid path: {img_path}. Please provide a valid image or dataset path.")
-        return
+@cli.command('dataset')
+@click.argument("dataset_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True))
+@click.option("--output", required=True, type=click.Path(), help="Output directory for extracted features")
+@click.option("--extractor", default="superpoint", help="Extractor name")
+@click.option("--max_keypoints", default=-1, type=int, help="Maximum number of keypoints")
+@click.option("--resize", default=640, type=int, help="Resize to max dimension")
+@click.option("--batch_size", default=1, type=int, help="Batch size for dataset extraction")
+@click.option("--num_workers", default=4, type=int, help="Number of workers for DataLoader")
+@click.option("--override", is_flag=True, help="Override existing features (default: resume mode)")
+@click.option("--print_freq", default=100, type=int, help="Frequency to print extraction details")
+@click.option("--force_cpu", is_flag=True, help="Force using CPU")
+@click.help_option("--help", "-h")
+def cmd_extract_dataset(
+    dataset_dir: str,
+    output: str,
+    extractor: str,
+    max_keypoints: int,
+    resize: int,
+    batch_size: int,
+    num_workers: int,
+    override: bool,
+    print_freq: int,
+    force_cpu: bool,
+) -> None:
+    """Extract features from a dataset of images."""
+    extract_dataset(
+        dataset_dir=dataset_dir,
+        output=output,
+        extractor=extractor,
+        max_keypoints=max_keypoints,
+        resize=resize,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        override=override,
+        print_freq=print_freq,
+        force_cpu=force_cpu,
+    )
 
 
 if __name__ == "__main__":
-    extract()
+    cli()

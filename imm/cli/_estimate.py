@@ -1,23 +1,26 @@
+import sys
+from pathlib import Path
 from typing import Optional
 
 import click
+import matplotlib
 import numpy as np
 from loguru import logger
 
+from imm.cli._match import Matching, load_and_process_image
 from imm.estimators import (
     CV_H_SOLVERS,
     create_fundamental_estimator,
     create_homography_estimator,
     create_relative_pose_estimator,
 )
-from imm.estimators._camera import Camera
+from imm.geometry import Camera
 from imm.settings import img0_path as default_img0_path
 from imm.settings import img1_path as default_img1_path
-from imm.cli._match import Matching, load_and_process_image
 from imm.utils.device import detect_device
+from imm.utils.logger import set_log_dir
 from imm.utils.warnings import suppress_warnings
-
-# Suppress warnings
+from imm.viz import EpipolarVisualizer, HomographyVisualizer, MatchVisualizer
 suppress_warnings()
 
 
@@ -29,7 +32,6 @@ def cli():
     Commands:
     - homography: Estimate the homography transformation between two images.
     - relative_pose: Estimate the relative pose between two images
-    - fundamental: Estimate the fundamental matrix between two images
     """
     pass
 
@@ -49,7 +51,7 @@ def cli():
 @click.option("--max_keypoints", default=-1, type=int, help="Max keypoints to keep (-1 keeps all)")
 @click.option("--resize", default=640, type=int, help="Resize to max dimension")
 @click.option("--output", default="output", help="Directory for logs and visualization")
-@click.option("show", "--show", is_flag=True, help="Show homography warp visualization")
+@click.option("--show", is_flag=True, help="Show homography warp visualization")
 @click.option("--warp-alpha", default=0.5, type=float, help="Blending factor for warp visualization (0-1)")
 @click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
 @click.help_option("--help", "-h")
@@ -71,6 +73,13 @@ def homography(
     force_cpu: bool,
 ):
     """Estimate the homography transformation between two images."""
+    suppress_warnings()
+
+    # Configure logging to output directory
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    set_log_dir(log_dir=output_dir, app_name="homography")
+
     logger.info(f"Homography estimation using {backend} backend")
 
     # Device
@@ -81,13 +90,12 @@ def homography(
     image1, image1_cv = load_and_process_image(img1_path, resize, device)
 
     # Match images
-    matcher_model = Matching(matcher_name=matcher,
-                             device=device, extractor_name=extractor,
-                             max_keypoints=max_keypoints)
-    m_preds = matcher_model.match_images(image0, image1)
+    matcher: Matching = Matching(matcher_name=matcher,
+                                 device=device, extractor_name=extractor,
+                                 max_keypoints=max_keypoints)
+    m_preds = matcher.match_images(image0, image1)
 
     # Get the estimator
-    h_estimator = create_homography_estimator(backend, solver, thd, max_iters, confidence)
     h_estimator = create_homography_estimator(
         backend, solver, reproj_thd, max_iters, confidence)
 
@@ -107,8 +115,6 @@ def homography(
         matches = m_preds["matches"][m_valid][inliers]
         mscores = m_preds["mscores"][m_valid][inliers]
 
-        from imm.viz import MatchVisualizer
-
         vis = MatchVisualizer()
         vis.draw_matches(
             image0_cv,
@@ -123,43 +129,39 @@ def homography(
         )
 
         # Save results and visualization
-        if output:
-            output_dir = Path(output)
-            output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = Path(output)
 
-            # Save homography matrix
-            h_file = output_dir / "homography.npy"
-            np.save(h_file, H)
-            logger.info(f"Homography saved to {h_file}")
+        # Save homography matrix
+        h_file = output_dir / "homography.npy"
+        np.save(h_file, H)
+        logger.info(f"Homography saved to {h_file}")
 
-            # Save visualization
-            viz_file = output_dir / "homography_matches.png"
-            vis.save(str(viz_file))
-            logger.info(f"Visualization saved to {viz_file}")
+        # Save visualization
+        viz_file = output_dir / "homography_matches.png"
+        vis.save(str(viz_file))
+        logger.info(f"Visualization saved to {viz_file}")
 
         # Homography warp visualization
-        if show or output:
-            from imm.viz import HomographyVisualizer
-            warp_vis = HomographyVisualizer()
-            blended = warp_vis.draw_homography_warp(
-                image0_cv,
-                image1_cv,
-                H,
-                alpha=warp_alpha,
-                title="Homography Warp",
-                show_image=show,
-            )
+        warp_vis = HomographyVisualizer()
+        blended = warp_vis.draw_homography_warp(
+            image0_cv,
+            image1_cv,
+            H,
+            alpha=warp_alpha,
+            title="Homography Warp",
+            show_image=show,
+        )
 
-            # Save warp visualization
-            if output:
-                warp_file = output_dir / "homography_warp.png"
-                warp_vis.save(str(warp_file))
-                logger.info(f"Warp visualization saved to {warp_file}")
+        # Save warp visualization
+        warp_file = output_dir / "homography_warp.png"
+        warp_vis.save(str(warp_file))
+        logger.info(f"Warp visualization saved to {warp_file}")
 
         logger.info(f"Estimation successful: {H}")
 
     else:
         logger.error("Estimation failed")
+        sys.exit(1)
 
     logger.info("Estimation completed")
 
@@ -179,7 +181,8 @@ def homography(
 @click.option("--max_keypoints", default=-1, type=int, help="Max keypoints to keep (-1 keeps all)")
 @click.option("--resize", default=640, type=int, help="Resize to max dimension")
 @click.option("--output", default="output", help="Directory for logs and visualization")
-@click.option("show", "--show", is_flag=True, help="Show the matches")
+@click.option("--show", is_flag=True, help="Show the matches")
+@click.option("--n_lines", default=5, type=int, help="Number of epipolar lines to visualize")
 @click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
 @click.help_option("--help", "-h")
 def relative_pose(
@@ -196,9 +199,17 @@ def relative_pose(
     resize: Optional[int],
     output: str,
     show: bool,
+    n_lines: int,
     force_cpu: bool,
 ):
     """Estimate the relative pose between two images."""
+    suppress_warnings()
+
+    # Configure logging to output directory
+    output_dir = Path(output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    set_log_dir(log_dir=output_dir, app_name="relative_pose")
+
     logger.info(f"Relative pose estimation using {backend} backend")
 
     # Device
@@ -216,21 +227,24 @@ def relative_pose(
     camera1 = Camera.from_image(image1_cv)
 
     # Match images
-    matcher_model = Matching(matcher_name=matcher,
-                             device=device, extractor_name=extractor,
-                             max_keypoints=max_keypoints)
-    m_preds = matcher_model.match_images(image0, image1)
+    matcher: Matching = Matching(matcher_name=matcher,
+                                 device=device, extractor_name=extractor,
+                                 max_keypoints=max_keypoints)
+    m_preds = matcher.match_images(image0, image1)
 
     # Get the estimator
-    r_estimator = create_relative_pose_estimator(
-        backend, solver, threshold, confidence, max_iters)
+    try:
+        r_estimator = create_relative_pose_estimator(
+            backend, solver, threshold, confidence, max_iters)
+    except Exception as e:
+        sys.exit(1)
 
     # Estimate
-    r_preds = r_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
+    r_preds = r_estimator.estimate(
+        m_preds["mkpts0"], m_preds["mkpts1"], camera0, camera1)
 
     if r_preds["success"]:
-        #
-        R, t, E = r_preds["R"], r_preds["t"], r_preds["E"]
+        R, t = r_preds["R"], r_preds["t"]
         inliers = r_preds["inliers"]
 
         # Filter out the inliers
@@ -242,135 +256,61 @@ def relative_pose(
         matches = m_preds["matches"][m_valid][inliers]
         mscores = m_preds["mscores"][m_valid][inliers]
 
-        F = np.linalg.inv(camera1.K).T @ E @ np.linalg.inv(camera0.K)
-
         # Visualize the matches
-        if visualize:
-            vis = MatchVisualizer()
+        vis = MatchVisualizer()
+        vis.draw_matches(
+            image0_cv,
+            image1_cv,
+            m_preds["kpts0"],
+            m_preds["kpts1"],
+            mkpts0,
+            mkpts1,
+            matches=matches,
+            mscores=mscores,
+            show_image=False,
+        )
 
-            # draw inlier matches
-            vis.draw_matches(
-                image0_cv,
-                image1_cv,
-                m_preds["kpts0"],
-                m_preds["kpts1"],
-                mkpts0,
-                mkpts1,
-                matches=matches,
-                mscores=mscores,
-            )
+        # Epipolar geometry visualization
+        epi_vis = EpipolarVisualizer()
+        epi_vis.draw_epipolar_lines(
+            image0_cv,
+            image1_cv,
+            m_preds["mkpts0"],
+            m_preds["mkpts1"],
+            R,
+            t,
+            camera0,
+            camera1,
+            inliers=inliers,
+            n_lines=n_lines,
+            title="Relative Pose - Epipolar Geometry",
+            show_image=show,
+        )
 
-            # draw epipolar lines
-            vis.draw_epipolar_line(
-                image0_cv,
-                image1_cv,
-                F,
-                kpts0=mkpts0,
-                kpts1=mkpts1,
-            )
+        # Save results and visualization
+        output_dir = Path(output)
 
-        logger.info(f"Estimation successful: {R}, {t}")
+        # Save visualization
+        viz_file = output_dir / "pose_epipolar.png"
+        epi_vis.save(str(viz_file))
+        logger.info(f"Epipolar visualization saved to {viz_file}")
 
-    else:
-        logger.error("Estimation failed")
+        # Save matches visualization
+        matches_file = output_dir / "pose_matches.png"
+        vis.save(str(matches_file))
+        logger.info(f"Matches visualization saved to {matches_file}")
 
-    logger.success("Estimation completed")
+        # Save relative pose
+        pose_file = output_dir / "relative_pose.npz"
+        np.savez(pose_file, R=R, t=t, inliers=inliers)
+        logger.info(f"Relative pose saved to {pose_file}")
 
-
-@cli.command()
-@click.argument("img0_path", type=click.Path(exists=True), default=default_img0_path)
-@click.argument("img1_path", type=click.Path(exists=True), default=default_img1_path)
-@click.option("--matcher", default="superglue_outdoor", help="Matcher name")
-@click.option("--extractor", default="superpoint", help="Extractor name")
-@click.option(
-    "--backend", default="opencv", type=click.Choice(["opencv", "poselib", "pycolmap"]), help="Estimator backend"
-)
-@click.option("--solver", default="ransac", type=click.Choice(["ransac", "usac_magsac"]), help="Pose solver")
-@click.option("--threshold", default=1.0, type=float, help="Threshold value")
-@click.option("--confidence", default=0.999, type=float, help="Confidence level")
-@click.option("--max_iters", default=1000, type=int, help="Max iterations")
-@click.option("--max_size", default=None, type=int, help="Max image size")
-@click.option("--output_dir", default="output", help="Output directory for logs and visualization")
-@click.option("--force_cpu", is_flag=True, help="Force the use of CPU instead of GPU")
-@click.option("visualize", "--visualize", is_flag=True, help="Visualize the matches")
-@click.help_option("--help", "-h")
-def fundamental(
-    img0_path: str,
-    img1_path: str,
-    matcher: str,
-    extractor: str,
-    backend: str,
-    solver: str,
-    threshold: float,
-    confidence: float,
-    max_iters: int,
-    max_size: Optional[int],
-    output_dir: str,
-    force_cpu: bool,
-    visualize: bool,
-):
-    """Estimate the fundamental matrix between two images."""
-    logger.info(f"Fundamental matrix estimation using {backend} backend")
-
-    # Device
-    device = detect_device(force_cpu)
-
-    # Load and process images
-    image0, image0_cv = load_and_process_image(img0_path, max_size, device)
-    image1, image1_cv = load_and_process_image(img1_path, max_size, device)
-
-    # Match images
-    matcher_model = Matching(matcher_name=matcher, device=device, extractor_name=extractor)
-    m_preds = matcher_model.match_images(image0, image1)
-
-    # Get the estimator
-    f_estimator = create_fundamental_estimator(backend, solver, threshold, confidence, max_iters)
-
-    # Estimate
-    f_preds = f_estimator.estimate(m_preds["mkpts0"], m_preds["mkpts1"])
-
-    if f_preds["success"]:
-        #
-        F, inliers = f_preds["F"], f_preds["inliers"]
-
-        # Filter out the inliers
-        mkpts0 = m_preds["mkpts0"][inliers]
-        mkpts1 = m_preds["mkpts1"][inliers]
-
-        m_valid = np.where(m_preds["matches"] > -1)[0]
-
-        matches = m_preds["matches"][m_valid][inliers]
-        mscores = m_preds["mscores"][m_valid][inliers]
-
-        # Visualize the matches (lazy import so imm-gui / estimate without --visualize skip matplotlib)
-        if visualize:
-            from imm.viz import MatchVisualizer
-            vis = MatchVisualizer()
-
-            vis.draw_matches(
-                image0_cv,
-                image1_cv,
-                m_preds["kpts0"],
-                m_preds["kpts1"],
-                mkpts0,
-                mkpts1,
-                matches=matches,
-                mscores=mscores,
-            )
-
-            # draw epipolar lines
-            vis.draw_epipolar_line(
-                image0_cv,
-                image1_cv,
-                F,
-                kpts0=mkpts0,
-                kpts1=mkpts1,
-            )
-
-        logger.info(f"Estimation successful: {F}")
+        logger.info(
+            f"Estimation successful: R shape={R.shape}, t shape={t.shape}")
 
     else:
         logger.error("Estimation failed")
+        sys.exit(1)
 
     logger.success("Estimation completed")
 

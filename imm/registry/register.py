@@ -1,8 +1,6 @@
 from typing import Any, Dict, List, Optional, Type
 
 import torch.nn as nn
-from rich.console import Console
-from rich.table import Table
 
 
 class ModelRegistry:
@@ -33,12 +31,14 @@ class ModelRegistry:
             KeyError: If the name is already registered.
         """
 
-        def decorator(cls: Type[nn.Module]) -> Type[nn.Module]:
+        def decorator(cls):
             if name in self._registry:
                 raise KeyError(
                     f"Model '{name}' is already registered in {self.name}")
-            # if not issubclass(cls, nn.Module):
-            #     raise TypeError(f"Registered model must be a subclass of nn.Module, got {cls}")
+            # Type validation: only check if it's actually a class
+            if isinstance(cls, type) and not issubclass(cls, nn.Module):
+                raise TypeError(
+                    f"Registered model must be a subclass of nn.Module, got {cls}")
             self._registry[name] = {
                 "class": cls,
                 "default_cfg": default_cfg or {},
@@ -74,13 +74,12 @@ class ModelRegistry:
         pretrained: bool = True,
         **kwargs,
     ) -> nn.Module:
-        """
-        Create an instance of a registered model with given configuration, pretrained option, and parameters.
+        """Create an instance of a registered model with given configuration, pretrained option, and parameters.
 
         Args:
             name (str): The name of the model to create.
             cfg (Optional[Dict[str, Any]]): Configuration dictionary to override the default config.
-            pretrained (bool): Whether to use pretrained weights. Defaults to False.
+            pretrained (bool): Whether to use pretrained weights. Defaults to True.
             **kwargs: Additional keyword arguments to pass to the model constructor.
 
         Returns:
@@ -128,9 +127,8 @@ class ModelRegistry:
         model_info = self.get(name)
         return model_info["default_cfg"].get("pretrained", False)
 
-    def get_defaultmerge_config(self, name: str) -> Dict[str, Any]:
-        """
-        Get the default configuration for a model.
+    def get_default_config(self, name: str) -> Dict[str, Any]:
+        """Get the default configuration for a model.
 
         Args:
             name (str): The name of the model.
@@ -164,27 +162,15 @@ class ModelRegistry:
         return len(self._registry)
 
     def __repr__(self) -> str:
-        """
-        Represent the full registry as a table using the rich library.
+        """Return string representation of the registry.
 
         Returns:
             str: A string representation of the registry.
         """
-        table = Table(title=f"{self.name} Model Registry at {self.location}")
-        table.add_column("Model Name", style="magenta")
-        table.add_column("Model Class", style="cyan")
-        table.add_column("Default Config", style="green")
-        for name, info in self._registry.items():
-            table.add_row(name, info["class"].__name__,
-                          str(info["default_cfg"]))
-        console = Console()
-        console.print(table)
-        return f"{self.name} Model Registry with {len(self)} models."
+        return f"{self.name} Model Registry at {self.location} with {len(self)} models"
 
-    @property
     def list_models(self) -> List[str]:
-        """
-        List all registered models.
+        """List all registered models.
 
         Returns:
             List[str]: A list of all registered model names.
