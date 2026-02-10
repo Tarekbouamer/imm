@@ -72,13 +72,15 @@ def create_line_extractor(
         ValueError: If the line extractor is not available in the registry.
         Exception: If there's an error during model creation.
     """
-    logger.info(f"Create line extractor: {name}" + (f" with config: {cfg}" if cfg is not None else ""))
+    logger.info(f"Create line extractor: {name}" +
+                (f" with config: {cfg}" if cfg is not None else ""))
 
     if not LINE_EXTRACTORS_REGISTRY.is_model(name):
         available_models = LINE_EXTRACTORS_REGISTRY.list_models()
         raise ValueError(
             f"Line extractor '{name}' is not available. " f"Available models are: {', '.join(available_models)}"
         )
-    model = LINE_EXTRACTORS_REGISTRY.create_model(name, cfg=cfg, pretrained=pretrained, **kwargs)
+    model = LINE_EXTRACTORS_REGISTRY.create_model(
+        name, cfg=cfg, pretrained=pretrained, **kwargs)
     logger.info(f"Successfully created line extractor: {name}")
     return model

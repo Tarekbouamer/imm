@@ -106,7 +106,8 @@ class SuperPoint(FeatureModel):
 
         # Extract descriptors
         dense_desc = descriptors
-        descriptors = [sample_descriptors(k[None], d[None], 8)[0] for k, d in zip(keypoints, descriptors)]
+        descriptors = [sample_descriptors(k[None], d[None], 8)[
+            0] for k, d in zip(keypoints, descriptors)]
 
         return {
             "kpts": keypoints,
